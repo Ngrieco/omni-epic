@@ -31,7 +31,7 @@ From: ubuntu:22.04
 	# Update and install required libraries
 	apt update
 	apt install -y unzip wget git software-properties-common ffmpeg
-	apt install -y build-essential libcairo2-dev libpango1.0-dev
+	apt install -y build-essential libcairo2-dev libpango1.0-dev libsdl-pango-dev
 
 	# Install Python
 	add-apt-repository ppa:deadsnakes/ppa
