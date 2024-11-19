@@ -1,29 +1,28 @@
 import ast
-import os
-import traceback
-import logging
-from time import sleep
-import re
-from textwrap import indent, dedent
 import base64
+import logging
+import os
+import re
+import traceback
 from io import BytesIO
-from PIL import Image
-import mediapy
+from textwrap import dedent, indent
+from time import sleep
 
-from openai import OpenAI
-from openai import RateLimitError, APIConnectionError
 import anthropic
 import google.generativeai as genai
+import mediapy
+from openai import APIConnectionError, OpenAI, RateLimitError
+from PIL import Image
 
 from embodied.envs.pybullet import PyBullet
-from omni_epic.core import prompts, ParseError
+from omni_epic.core import ParseError, prompts
+from omni_epic.envs import EnvironmentError, test_env, test_env_halts
 from omni_epic.robots import robot_dict
-from omni_epic.envs import EnvironmentError, test_env_halts, test_env
+
 logger = logging.getLogger(__name__)
 
 
 class FM:
-
 	def __init__(self, config):
 		self._config = config
 		self._client_name = self._config.client
@@ -48,8 +47,9 @@ class FM:
 					"image_url": {
 						"url": f"data:image/png;base64,{xs}",
 						# "detail": "low",
-					}
-				} for xs in input_images
+					},
+				}
+				for xs in input_images
 			]
 			new_prompt.append({"type": "text", "text": prompt})
 		elif client_name == "anthropic":
@@ -61,7 +61,8 @@ class FM:
 						"media_type": "image/png",
 						"data": xs,
 					},
-				} for xs in input_images
+				}
+				for xs in input_images
 			]
 			new_prompt.append({"type": "text", "text": prompt})
 		elif client_name == "google":
@@ -73,48 +74,73 @@ class FM:
 		while True:
 			try:
 				if self._client_name == "openai":
-					completion = self._client.chat.completions.create(
-						messages=[
-							{"role": "system", "content": system_prompt},
-							{"role": "user", "content": user_prompt},
-						],
-						model=self._model,
-						max_tokens=self._config.max_tokens,
-						temperature=self._config.temperature,
-					).choices[0].message.content
+					completion = (
+						self._client.chat.completions.create(
+							messages=[
+								{"role": "system", "content": system_prompt},
+								{"role": "user", "content": user_prompt},
+							],
+							model=self._model,
+							max_tokens=self._config.max_tokens,
+							temperature=self._config.temperature,
+						)
+						.choices[0]
+						.message.content
+					)
 				elif self._client_name == "anthropic":
-					completion = self._client.messages.create(
-						system=system_prompt,
-						messages=[
-							{"role": "user", "content": user_prompt},
-						],
-						model=self._model,
-						max_tokens=self._config.max_tokens,
-						temperature=self._config.temperature,
-					).content[0].text
+					completion = (
+						self._client.messages.create(
+							system=system_prompt,
+							messages=[
+								{"role": "user", "content": user_prompt},
+							],
+							model=self._model,
+							max_tokens=self._config.max_tokens,
+							temperature=self._config.temperature,
+						)
+						.content[0]
+						.text
+					)
 				elif self._client_name == "google":
 					# NOTE: have to use this complicated multiprocessing thing so that training with JAX runs after using the gemini API.
 					from multiprocessing import Process, Queue
 
 					def generate_content(q, user_prompt, system_prompt, client, config):
-						user_prompt = user_prompt if isinstance(user_prompt, list) else [user_prompt]
+						user_prompt = (
+							user_prompt if isinstance(user_prompt, list) else [user_prompt]
+						)
 						completion = client.generate_content(
 							contents=[f"System prompt: {system_prompt}", *user_prompt],
 							generation_config=genai.types.GenerationConfig(
 								max_output_tokens=config.max_tokens,
 								temperature=config.temperature,
-							)
+							),
 						).text
 						q.put(completion)
 
 					q = Queue()
-					p = Process(target=generate_content, args=(q, user_prompt, system_prompt, self._client, self._config))
+					p = Process(
+						target=generate_content,
+						args=(
+							q,
+							user_prompt,
+							system_prompt,
+							self._client,
+							self._config,
+						),
+					)
 					p.start()
 					p.join()  # Wait for the process to finish
 					completion = q.get()  # Get the result from the queue
 				# Log completion
 				completion = completion.strip()
-				logger.info({"system_prompt": system_prompt, "user_prompt": user_prompt, "completion": completion})
+				logger.info(
+					{
+						"system_prompt": system_prompt,
+						"user_prompt": user_prompt,
+						"completion": completion,
+					}
+				)
 				return completion
 			except (RateLimitError, APIConnectionError, Exception) as e:
 				logger.info(f"API got error {e}. Retrying after 10 seconds.")
@@ -122,7 +148,7 @@ class FM:
 
 	def wrap_string(self, string):
 		"""Wrap string in triple quotes."""
-		return f"\"\"\"\n{string}\n\"\"\""
+		return f'"""\n{string}\n"""'
 
 	def wrap_code(self, code):
 		"""Wrap code in a python block."""
@@ -132,11 +158,11 @@ class FM:
 		error = error.strip()
 		lines = []
 		for line in error.splitlines():
-			if set(line) == {'^', ' '}:
+			if set(line) == {"^", " "}:
 				pass
 			else:
 				lines.append(line)
-		return '\n'.join(lines)
+		return "\n".join(lines)
 
 	def get_env_code(self, env_path):
 		"""Get environment code from env_path."""
@@ -157,55 +183,87 @@ class FM:
 
 	def parse_env_code(self, completion):
 		"""Parse the environment code from the completion."""
-		match = re.search(r"Environment code:\s*```python\s*(.*?)\s*```", completion, re.DOTALL | re.IGNORECASE)
+		match = re.search(
+			r"Environment code:\s*```python\s*(.*?)\s*```",
+			completion,
+			re.DOTALL | re.IGNORECASE,
+		)
 
 		if match:
 			env_code = match.group(1).strip()
 			return env_code
 		else:
-			raise ParseError("No environment code found in your response. Please follow the desired format.")
+			raise ParseError(
+				"No environment code found in your response. Please follow the desired format."
+			)
 
 	def parse_next_task_desc(self, completion):
 		"""Parse the next task description from the completion."""
-		match = re.search(r"Next task description:\s*\"\"\"(.*)\"\"\"", completion, re.DOTALL | re.IGNORECASE)
+		match = re.search(
+			r"Next task description:\s*\"\"\"(.*)\"\"\"",
+			completion,
+			re.DOTALL | re.IGNORECASE,
+		)
 
 		if match:
 			next_task_desc = dedent(match.group(1)).strip()
 			return next_task_desc
 		else:
-			raise ParseError("No next task description found in your response. Please follow the desired format.")
+			raise ParseError(
+				"No next task description found in your response. Please follow the desired format."
+			)
 
 	def parse_success(self, completion):
 		"""Parse the task success from the completion."""
-		match = re.search(r"Did the robot solve the task\?:\s*(.*?)$", completion, re.MULTILINE | re.IGNORECASE)
+		match = re.search(
+			r"Did the robot solve the task\?:\s*(.*?)$",
+			completion,
+			re.MULTILINE | re.IGNORECASE,
+		)
 
 		if match:
 			task_success = match.group(1).strip()
 			task_success = task_success.split(" ")[0].lower()  # if there are words after the answer
 			return "yes" in task_success  # handle the case where there are punctuations
 		else:
-			raise ParseError("No task success/failure evaluation found in your response. Please follow the desired format.")
+			raise ParseError(
+				"No task success/failure evaluation found in your response. Please follow the desired format."
+			)
 
 	def parse_success_reasoning(self, completion):
 		"""Parse the task success reasoning from the completion."""
-		match = re.search(r"Reasoning for task success/failure:\s*(.*?)\s*Did the robot solve the task\?:", completion, re.DOTALL | re.IGNORECASE)
+		match = re.search(
+			r"Reasoning for task success/failure:\s*(.*?)\s*Did the robot solve the task\?:",
+			completion,
+			re.DOTALL | re.IGNORECASE,
+		)
 
 		if match:
 			task_success_reasoning = match.group(1).strip()
 			return task_success_reasoning
 		else:
-			raise ParseError("No task success/failure reasoning found in your response. Please follow the desired format.")
+			raise ParseError(
+				"No task success/failure reasoning found in your response. Please follow the desired format."
+			)
 
 	def parse_interestingness(self, completion):
 		"""Parse the interestingness from the completion."""
-		match = re.search(r"Is the new task interesting\?:\s*(.*?)$", completion, re.MULTILINE | re.IGNORECASE)
+		match = re.search(
+			r"Is the new task interesting\?:\s*(.*?)$",
+			completion,
+			re.MULTILINE | re.IGNORECASE,
+		)
 
 		if match:
 			is_interesting = match.group(1).strip()
-			is_interesting = is_interesting.split(" ")[0].lower()  # if there are words after the answer
+			is_interesting = is_interesting.split(" ")[
+				0
+			].lower()  # if there are words after the answer
 			return "yes" in is_interesting
 		else:
-			raise ParseError("No task interestingness evaluation found in your response. Please follow the desired format.")
+			raise ParseError(
+				"No task interestingness evaluation found in your response. Please follow the desired format."
+			)
 
 	def query_env_code(self, robot, task_desc, add_examples=True, env_paths_other=[]):
 		"""Query environment code for the given task description."""
@@ -217,7 +275,9 @@ class FM:
 		env_codes_example = "\n\n".join(env_codes_example + env_code_others)
 
 		system_prompt = prompts.query_env_code.system_prompt.format(ROBOT_DESC=robot_desc)
-		user_prompt = prompts.query_env_code.user_prompt.format(ENV_CODES_EXAMPLE=env_codes_example, TASK_DESC=task_desc_wrapped)
+		user_prompt = prompts.query_env_code.user_prompt.format(
+			ENV_CODES_EXAMPLE=env_codes_example, TASK_DESC=task_desc_wrapped
+		)
 
 		# Prompt FM
 		logger.info(f"Query environment code.\nTask description:\n{task_desc_wrapped}")
@@ -246,7 +306,16 @@ class FM:
 		completion = self._chat_completion(system_prompt, user_prompt)
 		return completion
 
-	def iterate_on_errors(self, robot, task_desc, completion, task_path, add_examples=True, env_paths_other=[], iteration_max=5):
+	def iterate_on_errors(
+		self,
+		robot,
+		task_desc,
+		completion,
+		task_path,
+		add_examples=True,
+		env_paths_other=[],
+		iteration_max=5,
+	):
 		os.makedirs(task_path, exist_ok=True)
 		iteration = 0
 		while iteration <= iteration_max:
@@ -268,13 +337,13 @@ class FM:
 					f.write(env_code)
 
 				# Test if environment halts
-				test_env_halts(env_path, timeout=10.)
+				test_env_halts(env_path, timeout=10.0)
 
 				# Test environment
 				test_env(env_path)
 			except ParseError as e:
 				env_code = str(None)
-				error = str(e) + f"\n\"\"\"\n\nTask description:\n\"\"\"{task_desc}"
+				error = str(e) + f'\n"""\n\nTask description:\n"""{task_desc}'
 			except EnvironmentError as e:
 				error = str(e)
 			except Exception:
@@ -294,23 +363,38 @@ class FM:
 			logger.info(f"Generate environment code, iteration {iteration}: ERROR")
 
 			# Reflect on error
-			completion = self.reflect_error(robot, env_code, error, add_examples=add_examples, env_paths_other=env_paths_other)
+			completion = self.reflect_error(
+				robot,
+				env_code,
+				error,
+				add_examples=add_examples,
+				env_paths_other=env_paths_other,
+			)
 			iteration += 1
 		return -1
 
-	def generate_env_code(self, robot, task_desc, task_path, add_examples=True, env_paths_other=[], iteration_max=5):
+	def generate_env_code(
+		self,
+		robot,
+		task_desc,
+		task_path,
+		add_examples=True,
+		env_paths_other=[],
+		iteration_max=5,
+	):
 		"""Generate environment code for the given task description."""
 		# Query environment code
 		completion = self.query_env_code(robot, task_desc)
 
 		# Iterate on errors
 		iteration = self.iterate_on_errors(
-			robot, task_desc,
+			robot,
+			task_desc,
 			completion,
 			task_path,
 			add_examples=add_examples,
 			env_paths_other=env_paths_other,
-			iteration_max=iteration_max
+			iteration_max=iteration_max,
 		)
 
 		return iteration
@@ -331,11 +415,19 @@ class FM:
 		)
 
 		# Prompt FM
-		logger.info(f"Reflect on task.")
+		logger.info("Reflect on task.")
 		completion = self._chat_completion(system_prompt, user_prompt)
 		return completion
 
-	def reflect_task_with_vision(self, robot, env_path, env_paths_other, failure_reasoning, input_image, add_examples=True):
+	def reflect_task_with_vision(
+		self,
+		robot,
+		env_path,
+		env_paths_other,
+		failure_reasoning,
+		input_image,
+		add_examples=True,
+	):
 		"""Reflect on task with vision."""
 		# Create prompts
 		robot_desc = robot_dict[robot]["robot_desc"]
@@ -357,7 +449,7 @@ class FM:
 		user_prompt = self._create_prompt_multimodal(user_prompt, input_image)
 
 		# Prompt FM
-		logger.info(f"Reflect on task with vision.")
+		logger.info("Reflect on task with vision.")
 		completion = self._chat_completion(system_prompt, user_prompt)
 		return completion
 
@@ -378,10 +470,14 @@ class FM:
 			system_prompt = prompts.query_next_task_desc_no_moi.system_prompt
 			user_prompt = prompts.query_next_task_desc_no_moi.user_prompt
 		system_prompt = system_prompt.format(ROBOT_DESC=robot_desc)
-		user_prompt = user_prompt.format(ENV_CODES_EXAMPLE=env_codes_example, ENV_CODES_LEARNED=env_codes_learned, ENV_CODES_FAILED=env_codes_failed)
+		user_prompt = user_prompt.format(
+			ENV_CODES_EXAMPLE=env_codes_example,
+			ENV_CODES_LEARNED=env_codes_learned,
+			ENV_CODES_FAILED=env_codes_failed,
+		)
 
 		# Prompt FM
-		logger.info(f"Query next task description.")
+		logger.info("Query next task description.")
 		completion = self._chat_completion(system_prompt, user_prompt)
 
 		# Parse next task description
@@ -394,24 +490,26 @@ class FM:
 			return next_task_desc
 
 	def query_success_with_vision(
-			self,
-			robot, robot_desc,
-			task_desc, task_codepath,
-			input_image,
+		self,
+		robot,
+		robot_desc,
+		task_desc,
+		task_codepath,
+		input_image,
 	):
 		"""Evaluate the success of the task using vision input.
 
 		Args:
-			robot: Robot name.
-			robot_desc: Robot description.
-			task_desc: Task description.
-			task_codepath: Task codepath.
-			input_image: Input image. Can be one image or a list of images.
+		        robot: Robot name.
+		        robot_desc: Robot description.
+		        task_desc: Task description.
+		        task_codepath: Task codepath.
+		        input_image: Input image. Can be one image or a list of images.
 
 		Returns:
-			completion: Completion text generated by FM.
-			task_success: Task success/failure indicator.
-			success_reasoning: Reasoning for task success/failure.
+		        completion: Completion text generated by FM.
+		        task_success: Task success/failure indicator.
+		        success_reasoning: Reasoning for task success/failure.
 		"""
 		# Process inputs
 		task_desc = self.wrap_string(task_desc)
@@ -433,8 +531,10 @@ class FM:
 		except Exception as e:
 			logger.info(f"Error: {e} Trying again.")
 			return self.query_success_with_vision(
-				robot, robot_desc,
-				task_desc, task_codepath,
+				robot,
+				robot_desc,
+				task_desc,
+				task_codepath,
 				input_image,
 			)
 
@@ -444,8 +544,10 @@ class FM:
 		except Exception as e:
 			logger.info(f"Error: {e} Trying again.")
 			return self.query_success_with_vision(
-				robot, robot_desc,
-				task_desc, task_codepath,
+				robot,
+				robot_desc,
+				task_desc,
+				task_codepath,
 				input_image,
 			)
 
@@ -455,13 +557,13 @@ class FM:
 		"""Evaluate if the generated task is interesting by comparing with the given tasks.
 
 		Args:
-			robot_desc: Robot description.
-			query_codepath: Query codepath.
-			compare_codepaths: Compare codepaths.
+		        robot_desc: Robot description.
+		        query_codepath: Query codepath.
+		        compare_codepaths: Compare codepaths.
 
 		Returns:
-			completion: Completion text generated by FM.
-			is_interesting: Task interestingness indicator.
+		        completion: Completion text generated by FM.
+		        is_interesting: Task interestingness indicator.
 		"""
 		# Process inputs
 		target_code = self.get_env_codes([query_codepath])
@@ -469,7 +571,9 @@ class FM:
 
 		# Build prompts
 		system_prompt = prompts.query_interestingness.system_prompt.format(ROBOT_DESC=robot_desc)
-		user_prompt = prompts.query_interestingness.user_prompt.format(ENV_CODES_EXAMPLE=compare_codes, ENV_CODE=target_code)
+		user_prompt = prompts.query_interestingness.user_prompt.format(
+			ENV_CODES_EXAMPLE=compare_codes, ENV_CODE=target_code
+		)
 
 		# Query FM
 		system_prompt = system_prompt.strip()
@@ -489,21 +593,22 @@ class FM:
 def update_env_docstring(env_code, task_desc):
 	"""
 	Modifies or adds a docstring to the class `Env` in the given env_code.
-	
+
 	Args:
 	env_code (str): The environment code containing class `Env`.
 	new_docstring (str): The new docstring to insert for the class 'Env'.
-	
+
 	Returns:
 	str: The modified env_code if the class 'Env' is found, or unchanged code otherwise.
 	"""
-	indentation = re.search(r'\n([ \t]+)def get_task_rewards', env_code, re.DOTALL).group(1)
-	task_desc_wrapped = '\n' + indent(task_desc, indentation) + '\n' + indentation
+	indentation = re.search(r"\n([ \t]+)def get_task_rewards", env_code, re.DOTALL).group(1)
+	task_desc_wrapped = "\n" + indent(task_desc, indentation) + "\n" + indentation
 
 	class DocstringUpdater(ast.NodeTransformer):
 		"""
 		AST Node Transformer to update or add docstrings to the specified class 'Env'.
 		"""
+
 		def visit_ClassDef(self, node):
 			if node.name == "Env":
 				if not ast.get_docstring(node):
@@ -512,7 +617,9 @@ def update_env_docstring(env_code, task_desc):
 				else:
 					# Replace the existing docstring
 					for i, n in enumerate(node.body):
-						if isinstance(n, ast.Expr) and isinstance(n.value, (ast.Constant, ast.Constant)):
+						if isinstance(n, ast.Expr) and isinstance(
+							n.value, (ast.Constant, ast.Constant)
+						):
 							node.body[i] = ast.Expr(value=ast.Constant(value=task_desc_wrapped))
 							break
 				return node

@@ -5,9 +5,11 @@ scipy
 jax[cuda12_pip]
 flax
 torch
+distrax
 tensorflow_probability
 scikit-learn
-kinetix
+jax2d
+jaxgl
 pybullet
 gym
 statsmodels
@@ -24,6 +26,7 @@ openai
 anthropic
 google-generativeai
 memory_profiler
+ruff
 
 # DreamerV3
 ruamel.yaml

@@ -1,6 +1,6 @@
 import multiprocessing
-import numpy as np
 
+import numpy as np
 
 # Task descriptions
 task_dict = {
@@ -10,63 +10,54 @@ Go up the stairs.
 The stairs have 10 steps going up. The steps are 1.0 meters in length, 5.0 meters in width, and 0.05 meters in height. The robot starts on the ground, 2.0 meters away from the bottom of the stairs.
 The task of the robot is to walk up the stairs, ensuring that it maintains its balance and does not fall.
 """.strip(),
-
 	"go_up_stairs_0.1m": """
 Go up the stairs.
 
 The stairs have 10 steps going up. The steps are 1.0 meters in length, 5.0 meters in width, and 0.1 meters in height. The robot starts on the ground, 2.0 meters away from the bottom of the stairs.
 The task of the robot is to walk up the stairs, ensuring that it maintains its balance and does not fall.
 """.strip(),
-
 	"hurdle_0.05m": """
 Run forward over one hurdle.
 
 A hurdle is placed 2.0 meters ahead of the robot. The hurdle measures 0.1 meters in length, 5.0 meters in width, and 0.05 meters in height.
 The task of the robot is to run forward, leaping over the hurdle without touching or sidestepping it.
 """.strip(),
-
 	"hurdles_0.05m": """
 Run forward over a series of 5 hurdles.
 
 A series of 5 hurdles spaced 2.0 meters apart, is placed 2.0 meters ahead of the robot. Each hurdle measures 0.1 meters in length, 5.0 meters in width, and 0.05 meters in height.
 The task of the robot is to run forward, leaping over the hurdles without touching or sidestepping it.
 """.strip(),
-
 	"kick_ball_to_goal": """
 Kick the ball towards the goal.
 
 A red ball is placed 2.0 meters from the robot. The goal is represented by a green box and is placed 5.0 meters from the robot.
 The task of the robot is to reach the ball as quickly as possible and kick the ball to push it towards the goal.
 """.strip(),
-
 	"kick_ball_to_goalposts": """
 Kick the ball towards the goal.
 
 A red ball is placed 2.0 meters away from the robot. The goal is represented by two green posts and is placed 5.0 meters from the robot. The goalposts are spaced at least twice the ball's diameter apart.
 The task of the robot is to reach the ball as quickly as possible and kick the ball to push it towards the goal between the two goalposts.
 """.strip(),
-
 	"walk_backward_on_cylinder": """
 Walk backward on a cylinder.
 
 The robot is standing on a 2-meter-radius cylinder that can roll on the floor on the x axis.
 The task of the robot is to walk backward on the cylinder while not falling off.
 """.strip(),
-
 	"dance_on_platform": """
 Dance on a platform.
 
 The robot is standing on a yellow platform that is 4.0 meters in length and width, and 0.1 meters in height above the ground.
 The task of the robot is to move its body, to dance to a periodic rhythm.
 """.strip(),
-
 	"cross_bridge_gap_0.05m": """
 Cross a pride-colored bridge with tiny gaps.
 
 A 6-meter-long bridge with pride colors links the start platform to the end platform. The bridge has tiny gaps of 0.05 meters between each segment.
 The task of the robot is to cross the bridge as quickly as possible.
 """.strip(),
-
 	"cross_bridge_gap_0.1m": """
 Cross a pride-colored bridge with tiny gaps.
 
@@ -160,12 +151,15 @@ To fix:
 Check the implementation of Env and ensure that all methods including Env.__init__ have proper termination conditions and don't contain infinite loops.
 """.strip()
 
+
 class EnvironmentError(Exception):
 	pass
+
 
 def test_env(env_path):
 	# Test Env.__init__
 	from embodied.envs.pybullet import PyBullet
+
 	env = PyBullet(env_path=env_path, vision=False)._env
 
 	try:
@@ -182,7 +176,7 @@ def test_env(env_path):
 			raise EnvironmentError(robot_colliding_error)
 
 		# Test Env.step
-		observation, reward, terminated, truncated, info = env.step(0. * env.action_space.sample())
+		observation, reward, terminated, truncated, info = env.step(0.0 * env.action_space.sample())
 
 		if not isinstance(observation, np.ndarray):
 			raise EnvironmentError(
@@ -190,7 +184,11 @@ def test_env(env_path):
 				"Please ensure that observation from Env.step returns a numpy.ndarray."
 			)
 
-		if not isinstance(terminated, bool) and not isinstance(terminated, np.bool_) and not (isinstance(terminated, np.ndarray) and terminated.dtype == bool):
+		if (
+			not isinstance(terminated, bool)
+			and not isinstance(terminated, np.bool_)
+			and not (isinstance(terminated, np.ndarray) and terminated.dtype == bool)
+		):
 			raise EnvironmentError(
 				f"Expected terminated from Env.step to be a boolean, but received type '{type(terminated).__name__}'. "
 				"Please ensure that terminated from Env.step returns a boolean."
@@ -198,7 +196,11 @@ def test_env(env_path):
 
 		# Test Env.get_success
 		success = env.get_success()
-		if not isinstance(success, bool) and not isinstance(success, np.bool_) and not (isinstance(success, np.ndarray) and success.dtype == bool):
+		if (
+			not isinstance(success, bool)
+			and not isinstance(success, np.bool_)
+			and not (isinstance(success, np.ndarray) and success.dtype == bool)
+		):
 			raise EnvironmentError(
 				f"Expected success from Env.get_success to be a boolean, but received type '{type(success).__name__}'. "
 				"Please ensure that success from Env.get_success returns a boolean."
@@ -217,7 +219,7 @@ def test_env(env_path):
 			raise EnvironmentError(success_error)
 
 		for _ in range(100):
-			env.step(0. * env.action_space.sample())
+			env.step(0.0 * env.action_space.sample())
 			if env.is_object_colliding():
 				raise EnvironmentError(object_colliding_error)
 			if env.is_robot_falling():
@@ -227,9 +229,11 @@ def test_env(env_path):
 	finally:
 		env.close()
 
+
 def env_run_all(env_path):
 	# Test Env.__init__
 	from embodied.envs.pybullet import PyBullet
+
 	env = PyBullet(env_path=env_path, vision=False)._env
 
 	try:
@@ -246,7 +250,8 @@ def env_run_all(env_path):
 	finally:
 		env.close()
 
-def test_env_halts(env_path, timeout=10.):
+
+def test_env_halts(env_path, timeout=10.0):
 	process = multiprocessing.Process(target=env_run_all, args=(env_path,))
 	process.start()
 
