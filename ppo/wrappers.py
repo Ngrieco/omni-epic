@@ -114,10 +114,10 @@ class LogWrapper(Wrapper):
 		env_state = self.env.reset(key)
 		env_state.info.update(
 			episode_returns=jnp.zeros_like(env_state.reward),
-			episode_lengths=jnp.zeros_like(env_state.reward, dtype=jnp.int32),
+			episode_lengths=jnp.zeros_like(env_state.reward),
 			returned_episode_returns=jnp.zeros_like(env_state.reward),
-			returned_episode_lengths=jnp.zeros_like(env_state.reward, dtype=jnp.int32),
-			timestep=jnp.zeros_like(env_state.reward, dtype=jnp.int32),
+			returned_episode_lengths=jnp.zeros_like(env_state.reward),
+			timestep=jnp.zeros_like(env_state.reward),
 		)
 		return env_state
 

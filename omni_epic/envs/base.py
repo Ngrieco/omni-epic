@@ -33,7 +33,7 @@ class EnvState:
 
 
 class EnvBase:
-	screen_dim = (256, 256)
+	screen_dim = (64, 64)
 	scene_size = 16  # 16 x 16
 
 	action_max = 5.0
@@ -116,10 +116,6 @@ class EnvBase:
 		# Initialize environment state
 		env_state = EnvState(sim_state=sim_state_init, observation=jnp.nan, reward=jnp.array(0.0), terminated=jnp.array(0.0), info={})
 		self.env_state_init = self.set_polygon_position(env_state, self.robot_idx, robot_position)
-		# manifolds = self.transform_manifolds(sim_state_init)
-		# actions = jnp.zeros(self.static_sim_params.num_joints + self.static_sim_params.num_thrusters)
-		# observation = self.get_observation(env_state, manifolds, actions)
-		# self.env_state_init = env_state.replace(observation=observation)
 
 	@cached_property
 	def action_space(self):
@@ -199,6 +195,17 @@ class EnvBase:
 			),
 			"image": self.renderer(env_state),
 		}
+
+	@partial(jax.jit, static_argnames=("self",))
+	def get_observation(self, env_state, manifolds, action):
+		return jnp.concatenate(
+			[
+				env_state.sim_state.polygon.position[self.robot_idx],
+				env_state.sim_state.polygon.velocity[self.robot_idx],
+				jnp.expand_dims(env_state.sim_state.polygon.rotation[self.robot_idx], axis=0),
+				jnp.expand_dims(env_state.sim_state.polygon.angular_velocity[self.robot_idx], axis=0),
+			]
+		)
 
 	@partial(jax.jit, static_argnames=("self",))
 	def apply_action(self, actions, action):
@@ -327,7 +334,7 @@ class EnvBase:
 
 
 def make_render(static_sim_params, screen_dim):
-	ppud = 16
+	ppud = 4
 	patch_size = 512
 	screen_padding = patch_size
 	full_screen_size = (

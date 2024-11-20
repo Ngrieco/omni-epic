@@ -6,7 +6,7 @@ hydra:
 
 seed: 0
 
-total_timesteps: 50e6
+total_timesteps: 1e6
 num_steps: 10
 num_envs: 2048
 update_epochs: 4
@@ -21,6 +21,10 @@ ent_coef: 0.0
 vf_coef: 0.5
 
 activation: tanh
+
 env_path: /workdir/omni_epic/envs/wall_is_lava.py
-normalize_env: True
+episode_length: 1000
+action_repeat: 1
+normalize_env: False
+
 debug: True

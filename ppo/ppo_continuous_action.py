@@ -9,7 +9,7 @@ import numpy as np
 import optax
 from flax.linen.initializers import constant, orthogonal
 from flax.training.train_state import TrainState
-from wrappers import (
+from ppo.wrappers import (
 	ClipAction,
 	Jax2DWrapper,
 	EpisodeWrapper,
@@ -63,8 +63,8 @@ class Transition(NamedTuple):
 
 
 def make_train(config):
-	config.num_updates = config.total_timesteps // config.num_steps // config.num_envs
-	config.minibatch_size = config.num_envs * config.num_steps // config.num_minibatches
+	num_updates = config.total_timesteps // config.num_steps // config.num_envs
+	minibatch_size = config.num_envs * config.num_steps // config.num_minibatches
 
 	env = Jax2DWrapper(config.env_path)
 	env = EpisodeWrapper(env, config.episode_length, config.action_repeat)
@@ -95,7 +95,8 @@ def make_train(config):
 		# INIT ENV
 		rng, _rng = jax.random.split(rng)
 		reset_rng = jax.random.split(_rng, config.num_envs)
-		obsv, env_state = env.reset(reset_rng)
+		env_state = env.reset(reset_rng)
+		obsv = env_state.observation
 
 		# TRAIN LOOP
 		def _update_step(runner_state, _):
@@ -112,8 +113,9 @@ def make_train(config):
 				# STEP ENV
 				rng, _rng = jax.random.split(rng)
 				rng_step = jax.random.split(_rng, config.num_envs)
-				obsv, env_state, reward, done, info = env.step(rng_step, env_state, action)
-				transition = Transition(done, action, value, reward, log_prob, last_obs, info)
+				env_state = env.step(rng_step, env_state, action)
+				obsv, reward, done, info = env_state.observation, env_state.reward, env_state.terminated, env_state.info
+				transition = Transition(last_obs, action, reward, done, value, log_prob, info)
 				runner_state = (train_state, env_state, obsv, rng)
 				return runner_state, transition
 
@@ -192,7 +194,7 @@ def make_train(config):
 
 				train_state, traj_batch, advantages, targets, rng = update_state
 				rng, _rng = jax.random.split(rng)
-				batch_size = config.minibatch_size * config.num_minibatches
+				batch_size = minibatch_size * config.num_minibatches
 				assert (
 					batch_size == config.num_steps * config.num_envs
 				), "batch size must be equal to number of steps * number of envs"
@@ -219,22 +221,20 @@ def make_train(config):
 			train_state = update_state[0]
 			metric = traj_batch.info
 			rng = update_state[-1]
-			if config.debug:
 
-				def callback(info):
-					return_values = info["returned_episode_returns"][info["returned_episode"]]
-					timesteps = info["timestep"][info["returned_episode"]] * config.num_envs
-					for t in range(len(timesteps)):
-						print(f"global step={timesteps[t]}, episodic return={return_values[t]}")
+			if config.debug:
+				def callback(metric):
+					return_values = metric["returned_episode_returns"][-1]
+					print(f"episodic return={jnp.mean(return_values)}")
 
 				jax.debug.callback(callback, metric)
 
 			runner_state = (train_state, env_state, last_obs, rng)
-			return runner_state, metric
+			return runner_state, ()
 
 		rng, _rng = jax.random.split(rng)
 		runner_state = (train_state, env_state, obsv, _rng)
-		runner_state, metric = jax.lax.scan(_update_step, runner_state, None, config.num_updates)
-		return {"runner_state": runner_state, "metrics": metric}
+		runner_state, _ = jax.lax.scan(_update_step, runner_state, None, num_updates)
+		return {"runner_state": runner_state}
 
 	return train
