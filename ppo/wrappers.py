@@ -95,9 +95,7 @@ class AutoResetWrapper(Wrapper):
 				terminated = jnp.reshape(terminated, [x.shape[0]] + [1] * (len(x.shape) - 1))
 			return jnp.where(terminated, x, y)
 
-		sim_state = jax.tree.map(
-			where_done, env_state.info["first_sim_state"], env_state.sim_state
-		)
+		sim_state = jax.tree.map(where_done, env_state.info["first_sim_state"], env_state.sim_state)
 		observation = jax.tree.map(
 			where_done, env_state.info["first_observation"], env_state.observation
 		)
@@ -129,9 +127,11 @@ class LogWrapper(Wrapper):
 		env_state.info.update(
 			episode_returns=new_episode_return * (1 - env_state.terminated),
 			episode_lengths=new_episode_length * (1 - env_state.terminated),
-			returned_episode_returns=env_state.info["returned_episode_returns"] * (1 - env_state.terminated)
+			returned_episode_returns=env_state.info["returned_episode_returns"]
+			* (1 - env_state.terminated)
 			+ new_episode_return * env_state.terminated,
-			returned_episode_lengths=env_state.info["returned_episode_lengths"] * (1 - env_state.terminated)
+			returned_episode_lengths=env_state.info["returned_episode_lengths"]
+			* (1 - env_state.terminated)
 			+ new_episode_length * env_state.terminated,
 			timestep=env_state.info["timestep"] + 1,
 		)
@@ -200,14 +200,20 @@ class NormalizeVecObservation(Wrapper):
 		delta = jax.tree.map(lambda x, y: x - y, batch_mean, env_state.info["observation_mean"])
 		tot_count = env_state.info["observation_count"] + batch_count
 
-		new_mean = jax.tree.map(lambda x, y: x + y * batch_count / tot_count, env_state.info["observation_mean"], delta)
-		m_a = jax.tree.map(lambda x: x * env_state.info["observation_count"], env_state.info["observation_var"])
+		new_mean = jax.tree.map(
+			lambda x, y: x + y * batch_count / tot_count, env_state.info["observation_mean"], delta
+		)
+		m_a = jax.tree.map(
+			lambda x: x * env_state.info["observation_count"], env_state.info["observation_var"]
+		)
 		m_b = jax.tree.map(lambda x: x * batch_count, batch_var)
 		m2 = jax.tree.map(
-			lambda x, y, z: x + y + jnp.square(z) * env_state.info["observation_count"] * batch_count / tot_count,
+			lambda x, y, z: x
+			+ y
+			+ jnp.square(z) * env_state.info["observation_count"] * batch_count / tot_count,
 			m_a,
 			m_b,
-			delta
+			delta,
 		)
 		new_var = jax.tree.map(lambda x: x / tot_count, m2)
 		new_count = tot_count
@@ -237,14 +243,22 @@ class NormalizeVecObservation(Wrapper):
 		delta = jax.tree.map(lambda x, y: x - y, batch_mean, env_state.info["observation_mean"])
 		tot_count = env_state.info["observation_count"] + batch_count
 
-		new_mean = jax.tree.map(lambda x, y: x + y * batch_count / tot_count, env_state.info["observation_mean"], delta)
-		m_a = jax.tree.map(lambda x, y: x * y, env_state.info["observation_var"], env_state.info["observation_count"])
+		new_mean = jax.tree.map(
+			lambda x, y: x + y * batch_count / tot_count, env_state.info["observation_mean"], delta
+		)
+		m_a = jax.tree.map(
+			lambda x, y: x * y,
+			env_state.info["observation_var"],
+			env_state.info["observation_count"],
+		)
 		m_b = jax.tree.map(lambda x, y: x * y, batch_var, batch_count)
 		m2 = jax.tree.map(
-			lambda x, y, z: x + y + jnp.square(z) * env_state.info["observation_count"] * batch_count / tot_count,
+			lambda x, y, z: x
+			+ y
+			+ jnp.square(z) * env_state.info["observation_count"] * batch_count / tot_count,
 			m_a,
 			m_b,
-			delta
+			delta,
 		)
 		new_var = jax.tree.map(lambda x: x / tot_count, m2)
 		new_count = tot_count
@@ -283,7 +297,10 @@ class NormalizeVecReward(Wrapper):
 
 	def step(self, key, env_state, action):
 		env_state = self.env.step(key, env_state, action)
-		return_val = env_state.info["reward_return_val"] * self.gamma * (1 - env_state.terminated) + env_state.reward
+		return_val = (
+			env_state.info["reward_return_val"] * self.gamma * (1 - env_state.terminated)
+			+ env_state.reward
+		)
 
 		batch_mean = jnp.mean(return_val, axis=0)
 		batch_var = jnp.var(return_val, axis=0)
@@ -295,7 +312,9 @@ class NormalizeVecReward(Wrapper):
 		new_mean = env_state.info["reward_mean"] + delta * batch_count / tot_count
 		m_a = env_state.info["reward_var"] * env_state.info["reward_count"]
 		m_b = batch_var * batch_count
-		M2 = m_a + m_b + jnp.square(delta) * env_state.info["reward_count"] * batch_count / tot_count
+		M2 = (
+			m_a + m_b + jnp.square(delta) * env_state.info["reward_count"] * batch_count / tot_count
+		)
 		new_var = M2 / tot_count
 		new_count = tot_count
 

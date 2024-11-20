@@ -114,7 +114,12 @@ def make_train(config):
 				rng, _rng = jax.random.split(rng)
 				rng_step = jax.random.split(_rng, config.num_envs)
 				env_state = env.step(rng_step, env_state, action)
-				obsv, reward, done, info = env_state.observation, env_state.reward, env_state.terminated, env_state.info
+				obsv, reward, done, info = (
+					env_state.observation,
+					env_state.reward,
+					env_state.terminated,
+					env_state.info,
+				)
 				transition = Transition(last_obs, action, reward, done, value, log_prob, info)
 				runner_state = (train_state, env_state, obsv, rng)
 				return runner_state, transition
@@ -223,6 +228,7 @@ def make_train(config):
 			rng = update_state[-1]
 
 			if config.debug:
+
 				def callback(metric):
 					return_values = metric["returned_episode_returns"][-1]
 					print(f"episodic return={jnp.mean(return_values)}")
@@ -234,7 +240,7 @@ def make_train(config):
 
 		rng, _rng = jax.random.split(rng)
 		runner_state = (train_state, env_state, obsv, _rng)
-		runner_state, _ = jax.lax.scan(_update_step, runner_state, None, num_updates)
-		return {"runner_state": runner_state}
+		(train_state, env_state, obsv, _rng), _ = jax.lax.scan(_update_step, runner_state, None, num_updates)
+		return train_state
 
 	return train

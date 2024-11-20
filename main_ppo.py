@@ -1,16 +1,22 @@
+import pickle
 import hydra
 from omegaconf import DictConfig
 
 import jax
 
-from ppo.ppo_continuous_action import make_train
+from ppo.ppo import make_train
 
 
 @hydra.main(version_base=None, config_path="configs/ppo/", config_name="ppo_xs")
 def main_ppo(config: DictConfig) -> None:
 	key = jax.random.PRNGKey(config.seed)
-	train_jit = jax.jit(make_train(config))
-	out = train_jit(key)
+
+	train = jax.jit(make_train(config))
+	train_state = train(key)
+
+	# Save params state
+	with open("params.pickle", "wb") as f:
+		pickle.dump(train_state.params, f)
 
 
 if __name__ == "__main__":

@@ -33,7 +33,7 @@ class EnvState:
 
 
 class EnvBase:
-	screen_dim = (64, 64)
+	screen_dim = (256, 256)
 	scene_size = 16  # 16 x 16
 
 	action_max = 5.0
@@ -62,59 +62,64 @@ class EnvBase:
 		self.right_wall_idx = 2
 		self.ceiling_idx = 3
 
+		# Initialize environment state
+		env_state = EnvState(
+			sim_state=sim_state_init,
+			observation=jnp.nan,
+			reward=jnp.array(0.0),
+			terminated=jnp.array(0.0),
+			info={},
+		)
+
 		# Build robot
 		robot_position = jnp.array([8.0, 8.0])
-		sim_state_init, (_, self.robot_idx) = add_rectangle_to_scene(
-			sim_state_init,
-			self.static_sim_params,
+		env_state, self.robot_idx = self.add_rectangle_to_scene(
+			env_state,
 			position=robot_position,
 			dimensions=jnp.array([1.0, 1.0]),
 			friction=0.1,
 			color=jnp.array([0.75, 0.75, 0.75]),
 		)
-		sim_state_init, (_, c_idx) = add_circle_to_scene(
-			sim_state_init,
-			self.static_sim_params,
+		env_state, c_idx = self.add_circle_to_scene(
+			env_state,
 			position=robot_position + jnp.array([0.0, 0.5]),
 			radius=0.5,
 			density=0.0,
 			color=jnp.array([0.1, 0.2, 0.6]),
 		)
-		sim_state_init, _ = add_fixed_joint_to_scene(
-			sim_state_init,
-			self.static_sim_params,
+		env_state, _ = self.add_fixed_joint_to_scene(
+			env_state,
 			a_index=self.robot_idx,
 			b_index=c_idx,
 			a_relative_pos=jnp.zeros(2),
 			b_relative_pos=jnp.array([0.0, -0.5]),
 		)
-		sim_state_init, _ = add_thruster_to_scene(  # Up thruster
-			sim_state_init,
+		env_state, _ = self.add_thruster_to_scene(  # Up thruster
+			env_state,
 			object_index=self.robot_idx,
 			relative_position=jnp.array([0.0, 1.0]),
 			rotation=jnp.pi / 2,
 		)
-		sim_state_init, _ = add_thruster_to_scene(  # Right thruster
-			sim_state_init,
+		env_state, _ = self.add_thruster_to_scene(  # Right thruster
+			env_state,
 			object_index=self.robot_idx,
 			relative_position=jnp.array([1.0, 0.25]),
 			rotation=0.0,
 		)
-		sim_state_init, _ = add_thruster_to_scene(  # Left thruster
-			sim_state_init,
+		env_state, _ = self.add_thruster_to_scene(  # Left thruster
+			env_state,
 			object_index=self.robot_idx,
 			relative_position=jnp.array([-1.0, 0.25]),
 			rotation=jnp.pi,
 		)
-		sim_state_init, _ = add_thruster_to_scene(  # Rotation thruster
-			sim_state_init,
+		env_state, _ = self.add_thruster_to_scene(  # Rotation thruster
+			env_state,
 			object_index=self.robot_idx,
 			relative_position=jnp.array([0.0, 1.0]),
 			rotation=0.0,
 		)
 
-		# Initialize environment state
-		env_state = EnvState(sim_state=sim_state_init, observation=jnp.nan, reward=jnp.array(0.0), terminated=jnp.array(0.0), info={})
+		# Initialize robot position
 		self.env_state_init = self.set_polygon_position(env_state, self.robot_idx, robot_position)
 
 	@cached_property
@@ -129,7 +134,9 @@ class EnvBase:
 
 	@partial(jax.jit, static_argnames=("self",))
 	def reset(self, env_state):
-		actions = jnp.zeros(self.static_sim_params.num_joints + self.static_sim_params.num_thrusters)
+		actions = jnp.zeros(
+			self.static_sim_params.num_joints + self.static_sim_params.num_thrusters
+		)
 
 		# Step simulation
 		sim_state, manifolds = self.step_fn(env_state.sim_state, self.sim_params, actions)
@@ -151,7 +158,11 @@ class EnvBase:
 		reward = self.get_reward(env_state, manifolds, actions)
 		terminated = self.get_terminated(env_state, manifolds, actions)
 
-		return env_state.replace(observation=observation, reward=reward.astype(jnp.float32), terminated=terminated.astype(jnp.float32))
+		return env_state.replace(
+			observation=observation,
+			reward=reward.astype(jnp.float32),
+			terminated=terminated.astype(jnp.float32),
+		)
 
 	@partial(jax.jit, static_argnames=("self",))
 	def get_reward(self, env_state, manifolds, actions):
@@ -177,7 +188,10 @@ class EnvBase:
 	@partial(jax.jit, static_argnames=("self",))
 	def get_robot_rewards(self, env_state, manifolds, actions):
 		action = (
-			actions[self.static_sim_params.num_joints : self.static_sim_params.num_joints + self.action_space.shape[0]]
+			actions[
+				self.static_sim_params.num_joints : self.static_sim_params.num_joints
+				+ self.action_space.shape[0]
+			]
 			/ self.action_max
 		)
 		return {"energy_penalty": jnp.sum(action**2)}
@@ -190,22 +204,26 @@ class EnvBase:
 					env_state.sim_state.polygon.position[self.robot_idx],
 					env_state.sim_state.polygon.velocity[self.robot_idx],
 					jnp.expand_dims(env_state.sim_state.polygon.rotation[self.robot_idx], axis=0),
-					jnp.expand_dims(env_state.sim_state.polygon.angular_velocity[self.robot_idx], axis=0),
+					jnp.expand_dims(
+						env_state.sim_state.polygon.angular_velocity[self.robot_idx], axis=0
+					),
 				]
 			),
 			"image": self.renderer(env_state),
 		}
 
-	@partial(jax.jit, static_argnames=("self",))
-	def get_observation(self, env_state, manifolds, action):
-		return jnp.concatenate(
-			[
-				env_state.sim_state.polygon.position[self.robot_idx],
-				env_state.sim_state.polygon.velocity[self.robot_idx],
-				jnp.expand_dims(env_state.sim_state.polygon.rotation[self.robot_idx], axis=0),
-				jnp.expand_dims(env_state.sim_state.polygon.angular_velocity[self.robot_idx], axis=0),
-			]
-		)
+	# @partial(jax.jit, static_argnames=("self",))
+	# def get_observation(self, env_state, manifolds, action):
+	# 	return jnp.concatenate(
+	# 		[
+	# 			env_state.sim_state.polygon.position[self.robot_idx],
+	# 			env_state.sim_state.polygon.velocity[self.robot_idx],
+	# 			jnp.expand_dims(env_state.sim_state.polygon.rotation[self.robot_idx], axis=0),
+	# 			jnp.expand_dims(
+	# 				env_state.sim_state.polygon.angular_velocity[self.robot_idx], axis=0
+	# 			),
+	# 		]
+	# 	)
 
 	@partial(jax.jit, static_argnames=("self",))
 	def apply_action(self, actions, action):
@@ -215,46 +233,78 @@ class EnvBase:
 		].set(self.action_max * action)
 
 	@partial(jax.jit, static_argnames=("self",))
+	def get_polygon_position(self, env_state, idx):
+		return env_state.sim_state.polygon.position[idx]
+
+	@partial(jax.jit, static_argnames=("self",))
+	def get_circle_position(self, env_state, idx):
+		return env_state.sim_state.circle.position[idx]
+
+	@partial(jax.jit, static_argnames=("self",))
+	def get_polygon_velocity(self, env_state, idx):
+		return env_state.sim_state.polygon.velocity[idx]
+
+	@partial(jax.jit, static_argnames=("self",))
+	def get_circle_velocity(self, env_state, idx):
+		return env_state.sim_state.circle.velocity[idx]
+
+	@partial(jax.jit, static_argnames=("self",))
 	def set_polygon_position(self, env_state, idx, position):
-		polygon = env_state.sim_state.polygon.replace(position=env_state.sim_state.polygon.position.at[idx].set(position))
+		polygon = env_state.sim_state.polygon.replace(
+			position=env_state.sim_state.polygon.position.at[idx].set(position)
+		)
 		return env_state.replace(sim_state=env_state.sim_state.replace(polygon=polygon))
 
 	@partial(jax.jit, static_argnames=("self",))
 	def set_circle_position(self, env_state, idx, position):
-		circle = env_state.sim_state.circle.replace(position=env_state.sim_state.circle.position.at[idx].set(position))
+		circle = env_state.sim_state.circle.replace(
+			position=env_state.sim_state.circle.position.at[idx].set(position)
+		)
 		return env_state.replace(sim_state=env_state.sim_state.replace(circle=circle))
 
 	@partial(jax.jit, static_argnames=("self",))
 	def set_polygon_velocity(self, env_state, idx, velocity):
-		polygon = env_state.sim_state.polygon.replace(velocity=env_state.sim_state.polygon.velocity.at[idx].set(velocity))
+		polygon = env_state.sim_state.polygon.replace(
+			velocity=env_state.sim_state.polygon.velocity.at[idx].set(velocity)
+		)
 		return env_state.replace(sim_state=env_state.sim_state.replace(polygon=polygon))
 
 	@partial(jax.jit, static_argnames=("self",))
 	def set_circle_velocity(self, env_state, idx, velocity):
-		circle = env_state.sim_state.circle.replace(velocity=env_state.sim_state.circle.velocity.at[idx].set(velocity))
+		circle = env_state.sim_state.circle.replace(
+			velocity=env_state.sim_state.circle.velocity.at[idx].set(velocity)
+		)
 		return env_state.replace(sim_state=env_state.sim_state.replace(circle=circle))
 
 	@partial(jax.jit, static_argnames=("self",))
 	def set_polygon_rotation(self, env_state, idx, rotation):
-		polygon = env_state.sim_state.polygon.replace(rotation=env_state.sim_state.polygon.rotation.at[idx].set(rotation))
+		polygon = env_state.sim_state.polygon.replace(
+			rotation=env_state.sim_state.polygon.rotation.at[idx].set(rotation)
+		)
 		return env_state.replace(sim_state=env_state.sim_state.replace(polygon=polygon))
 
 	@partial(jax.jit, static_argnames=("self",))
 	def set_circle_rotation(self, env_state, idx, rotation):
-		circle = env_state.sim_state.circle.replace(rotation=env_state.sim_state.circle.rotation.at[idx].set(rotation))
+		circle = env_state.sim_state.circle.replace(
+			rotation=env_state.sim_state.circle.rotation.at[idx].set(rotation)
+		)
 		return env_state.replace(sim_state=env_state.sim_state.replace(circle=circle))
 
 	@partial(jax.jit, static_argnames=("self",))
 	def set_polygon_angular_velocity(self, env_state, idx, angular_velocity):
 		polygon = env_state.sim_state.polygon.replace(
-			angular_velocity=env_state.sim_state.polygon.angular_velocity.at[idx].set(angular_velocity)
+			angular_velocity=env_state.sim_state.polygon.angular_velocity.at[idx].set(
+				angular_velocity
+			)
 		)
 		return env_state.replace(sim_state=env_state.sim_state.replace(polygon=polygon))
 
 	@partial(jax.jit, static_argnames=("self",))
 	def set_circle_angular_velocity(self, env_state, idx, angular_velocity):
 		circle = env_state.sim_state.circle.replace(
-			angular_velocity=env_state.sim_state.circle.angular_velocity.at[idx].set(angular_velocity)
+			angular_velocity=env_state.sim_state.circle.angular_velocity.at[idx].set(
+				angular_velocity
+			)
 		)
 		return env_state.replace(sim_state=env_state.sim_state.replace(circle=circle))
 
@@ -272,15 +322,21 @@ class EnvBase:
 
 	@partial(jax.jit, static_argnames=("self",))
 	def dist_pp(self, env_state, idxa, idxb):
-		return jnp.linalg.norm(env_state.sim_state.polygon.position[idxa] - env_state.sim_state.polygon.position[idxb])
+		return jnp.linalg.norm(
+			env_state.sim_state.polygon.position[idxa] - env_state.sim_state.polygon.position[idxb]
+		)
 
 	@partial(jax.jit, static_argnames=("self",))
 	def dist_cc(self, env_state, idxa, idxb):
-		return jnp.linalg.norm(env_state.sim_state.circle.position[idxa] - env_state.sim_state.circle.position[idxb])
+		return jnp.linalg.norm(
+			env_state.sim_state.circle.position[idxa] - env_state.sim_state.circle.position[idxb]
+		)
 
 	@partial(jax.jit, static_argnames=("self",))
 	def dist_cp(self, env_state, idxa, idxb):
-		return jnp.linalg.norm(env_state.sim_state.circle.position[idxa] - env_state.sim_state.polygon.position[idxb])
+		return jnp.linalg.norm(
+			env_state.sim_state.circle.position[idxa] - env_state.sim_state.polygon.position[idxb]
+		)
 
 	@partial(jax.jit, static_argnames=("self",))
 	def collision_pp(self, manifolds, idxa, idxb):
@@ -332,9 +388,112 @@ class EnvBase:
 			sim_state.acc_cc_manifolds,
 		)
 
+	@partial(jax.jit, static_argnames=("self",))
+	def add_rectangle_to_scene(
+		self,
+		env_state,
+		position,
+		dimensions,
+		rotation=0.0,
+		velocity=jnp.zeros(2),
+		angular_velocity=0.0,
+		density=1.0,
+		friction=1.0,
+		restitution=0.0,
+		fixated=False,
+		color=jnp.ones(3),
+	):
+		sim_state, (_, idx) = add_rectangle_to_scene(
+			sim_state=env_state.sim_state,
+			static_sim_params=self.static_sim_params,
+			position=position,
+			dimensions=dimensions,
+			rotation=rotation,
+			velocity=velocity,
+			angular_velocity=angular_velocity,
+			density=density,
+			friction=friction,
+			restitution=restitution,
+			fixated=fixated,
+			color=color,
+		)
+		env_state = env_state.replace(sim_state=sim_state)
+		return env_state, idx
+
+	@partial(jax.jit, static_argnames=("self",))
+	def add_circle_to_scene(
+		self,
+		env_state,
+		position,
+		radius,
+		rotation=0.0,
+		velocity=jnp.zeros(2),
+		angular_velocity=0.0,
+		density=1.0,
+		friction=1.0,
+		restitution=0.0,
+		fixated=False,
+		color=jnp.ones(3),
+	):
+		sim_state, (_, idx) = add_circle_to_scene(
+			sim_state=env_state.sim_state,
+			static_sim_params=self.static_sim_params,
+			position=position,
+			radius=radius,
+			rotation=rotation,
+			velocity=velocity,
+			angular_velocity=angular_velocity,
+			density=density,
+			friction=friction,
+			restitution=restitution,
+			fixated=fixated,
+			color=color,
+		)
+		env_state = env_state.replace(sim_state=sim_state)
+		return env_state, idx
+
+	@partial(jax.jit, static_argnames=("self",))
+	def add_fixed_joint_to_scene(
+		self,
+		env_state,
+		a_index,
+		b_index,
+		a_relative_pos,
+		b_relative_pos,
+	):
+		sim_state, idx = add_fixed_joint_to_scene(
+			sim_state=env_state.sim_state,
+			static_sim_params=self.static_sim_params,
+			a_index=a_index,
+			b_index=b_index,
+			a_relative_pos=a_relative_pos,
+			b_relative_pos=b_relative_pos,
+		)
+		env_state = env_state.replace(sim_state=sim_state)
+		return env_state, idx
+
+	@partial(jax.jit, static_argnames=("self",))
+	def add_thruster_to_scene(
+		self,
+		env_state,
+		object_index,
+		relative_position,
+		rotation,
+		power=1.0,
+	):
+		sim_state, idx = add_thruster_to_scene(
+			sim_state=env_state.sim_state,
+			object_index=object_index,
+			relative_position=relative_position,
+			rotation=rotation,
+			power=power,
+		)
+		env_state = env_state.replace(sim_state=sim_state)
+		return env_state, idx
+
 
 def make_render(static_sim_params, screen_dim):
-	ppud = 4
+	ppud = 16
 	patch_size = 512
 	screen_padding = patch_size
 	full_screen_size = (
