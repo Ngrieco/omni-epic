@@ -30,11 +30,11 @@ class Env(EnvBase):
 
 	@partial(jax.jit, static_argnames=("self",))
 	def reset(self, key):
-		env_state = super().reset()
-
 		# Set initial position of the robot
 		position = jax.random.uniform(key, (2,), minval=6.0, maxval=10.0)
-		env_state = self.set_polygon_position(env_state, self.robot_idx, position)
+		env_state = self.set_polygon_position(self.env_state_init, self.robot_idx, position)
+
+		env_state = super().reset(env_state)
 
 		return env_state
 

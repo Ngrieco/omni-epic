@@ -53,12 +53,12 @@ class ActorCritic(nn.Module):
 
 
 class Transition(NamedTuple):
-	done: jnp.ndarray
-	action: jnp.ndarray
-	value: jnp.ndarray
-	reward: jnp.ndarray
-	log_prob: jnp.ndarray
 	obs: jnp.ndarray
+	action: jnp.ndarray
+	reward: jnp.ndarray
+	done: jnp.ndarray
+	value: jnp.ndarray
+	log_prob: jnp.ndarray
 	info: jnp.ndarray
 
 
@@ -98,9 +98,9 @@ def make_train(config):
 		obsv, env_state = env.reset(reset_rng)
 
 		# TRAIN LOOP
-		def _update_step(runner_state, unused):
+		def _update_step(runner_state, _):
 			# COLLECT TRAJECTORIES
-			def _env_step(runner_state, unused):
+			def _env_step(runner_state, _):
 				train_state, env_state, last_obs, rng = runner_state
 
 				# SELECT ACTION
@@ -147,7 +147,7 @@ def make_train(config):
 			advantages, targets = _calculate_gae(traj_batch, last_val)
 
 			# UPDATE NETWORK
-			def _update_epoch(update_state, unused):
+			def _update_epoch(update_state, _):
 				def _update_minbatch(train_state, batch_info):
 					traj_batch, advantages, targets = batch_info
 
@@ -223,7 +223,7 @@ def make_train(config):
 
 				def callback(info):
 					return_values = info["returned_episode_returns"][info["returned_episode"]]
-					timesteps = info["timestep"][info["returned_episode"]] * config["NUM_ENVS"]
+					timesteps = info["timestep"][info["returned_episode"]] * config.num_envs
 					for t in range(len(timesteps)):
 						print(f"global step={timesteps[t]}, episodic return={return_values[t]}")
 

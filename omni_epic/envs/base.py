@@ -26,6 +26,7 @@ from omni_epic.jax2d.scene import add_circle_to_scene, add_rectangle_to_scene
 @struct.dataclass
 class EnvState:
 	sim_state: SimState
+	observation: jax.Array
 	reward: float
 	terminated: bool
 	info: dict
@@ -62,7 +63,7 @@ class EnvBase:
 		self.ceiling_idx = 3
 
 		# Build robot
-		robot_position = jnp.array([5.0, 5.0])
+		robot_position = jnp.array([8.0, 8.0])
 		sim_state_init, (_, self.robot_idx) = add_rectangle_to_scene(
 			sim_state_init,
 			self.static_sim_params,
@@ -111,7 +112,14 @@ class EnvBase:
 			relative_position=jnp.array([0.0, 1.0]),
 			rotation=0.0,
 		)
-		self.env_state_init = EnvState(sim_state=sim_state_init, reward=jnp.array(0.0), terminated=jnp.array(0.0), info={})
+
+		# Initialize environment state
+		env_state = EnvState(sim_state=sim_state_init, observation=jnp.nan, reward=jnp.array(0.0), terminated=jnp.array(0.0), info={})
+		self.env_state_init = self.set_polygon_position(env_state, self.robot_idx, robot_position)
+		# manifolds = self.transform_manifolds(sim_state_init)
+		# actions = jnp.zeros(self.static_sim_params.num_joints + self.static_sim_params.num_thrusters)
+		# observation = self.get_observation(env_state, manifolds, actions)
+		# self.env_state_init = env_state.replace(observation=observation)
 
 	@cached_property
 	def action_space(self):
@@ -124,26 +132,17 @@ class EnvBase:
 		return gym.spaces.Box(-high, high, dtype=np.float32)
 
 	@partial(jax.jit, static_argnames=("self",))
-	def get_robot_state(self, env_state, manifolds, action):
-		return jnp.concatenate(
-			[
-				env_state.sim_state.polygon.position[self.robot_idx],
-				env_state.sim_state.polygon.velocity[self.robot_idx],
-				jnp.expand_dims(env_state.sim_state.polygon.rotation[self.robot_idx], axis=0),
-				jnp.expand_dims(env_state.sim_state.polygon.angular_velocity[self.robot_idx], axis=0),
-			]
-		)
+	def reset(self, env_state):
+		actions = jnp.zeros(self.static_sim_params.num_joints + self.static_sim_params.num_thrusters)
 
-	@partial(jax.jit, static_argnames=("self",))
-	def apply_action(self, actions, action):
-		action = jnp.clip(action, -1.0, 1.0)
-		return actions.at[
-			self.static_sim_params.num_joints : self.static_sim_params.num_joints + 4
-		].set(self.action_max * action)
+		# Step simulation
+		sim_state, manifolds = self.step_fn(env_state.sim_state, self.sim_params, actions)
+		env_state = env_state.replace(sim_state=sim_state)
 
-	@partial(jax.jit, static_argnames=("self",))
-	def reset(self):
-		return self.env_state_init
+		# Observation
+		observation = self.get_observation(env_state, manifolds, actions)
+
+		return env_state.replace(observation=observation)
 
 	@partial(jax.jit, static_argnames=("self",))
 	def step(self, env_state, actions):
@@ -151,25 +150,18 @@ class EnvBase:
 		sim_state, manifolds = self.step_fn(env_state.sim_state, self.sim_params, actions)
 		env_state = env_state.replace(sim_state=sim_state)
 
-		# Reward, terminated
+		# Observation, reward, terminated
+		observation = self.get_observation(env_state, manifolds, actions)
 		reward = self.get_reward(env_state, manifolds, actions)
 		terminated = self.get_terminated(env_state, manifolds, actions)
 
-		return env_state.replace(reward=reward.astype(jnp.float32), terminated=terminated.astype(jnp.float32))
+		return env_state.replace(observation=observation, reward=reward.astype(jnp.float32), terminated=terminated.astype(jnp.float32))
 
 	@partial(jax.jit, static_argnames=("self",))
 	def get_reward(self, env_state, manifolds, actions):
 		robot_rewards = self.get_robot_rewards(env_state, manifolds, actions)
 		task_rewards = self.get_task_rewards(env_state, manifolds, actions)
 		return sum(robot_rewards.values()) + sum(task_rewards.values())
-
-	@partial(jax.jit, static_argnames=("self",))
-	def get_robot_rewards(self, env_state, manifolds, actions):
-		action = (
-			actions[self.static_sim_params.num_joints : self.static_sim_params.num_joints + 4]
-			/ self.action_max
-		)
-		return {"energy_penalty": jnp.sum(action**2)}
 
 	@partial(jax.jit, static_argnames=("self",))
 	def get_task_rewards(self, env_state, manifolds, actions):
@@ -185,6 +177,35 @@ class EnvBase:
 
 	def close(self):
 		pass
+
+	@partial(jax.jit, static_argnames=("self",))
+	def get_robot_rewards(self, env_state, manifolds, actions):
+		action = (
+			actions[self.static_sim_params.num_joints : self.static_sim_params.num_joints + self.action_space.shape[0]]
+			/ self.action_max
+		)
+		return {"energy_penalty": jnp.sum(action**2)}
+
+	@partial(jax.jit, static_argnames=("self",))
+	def get_observation(self, env_state, manifolds, action):
+		return {
+			"vector": jnp.concatenate(
+				[
+					env_state.sim_state.polygon.position[self.robot_idx],
+					env_state.sim_state.polygon.velocity[self.robot_idx],
+					jnp.expand_dims(env_state.sim_state.polygon.rotation[self.robot_idx], axis=0),
+					jnp.expand_dims(env_state.sim_state.polygon.angular_velocity[self.robot_idx], axis=0),
+				]
+			),
+			"image": self.renderer(env_state),
+		}
+
+	@partial(jax.jit, static_argnames=("self",))
+	def apply_action(self, actions, action):
+		action = jnp.clip(action, -1.0, 1.0)
+		return actions.at[
+			self.static_sim_params.num_joints : self.static_sim_params.num_joints + 4
+		].set(self.action_max * action)
 
 	@partial(jax.jit, static_argnames=("self",))
 	def set_polygon_position(self, env_state, idx, position):
@@ -295,6 +316,14 @@ class EnvBase:
 			& (self.physics_engine.circle_poly_pairs[:, 1] == idxa)
 		)
 		return jnp.any(pair * get_active(manifolds[1]))
+
+	@partial(jax.jit, static_argnames=("self",))
+	def transform_manifolds(self, sim_state):
+		return (
+			jax.tree.map(lambda x: x[:, 0], sim_state.acc_rr_manifolds),
+			sim_state.acc_cr_manifolds,
+			sim_state.acc_cc_manifolds,
+		)
 
 
 def make_render(static_sim_params, screen_dim):
