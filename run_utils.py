@@ -9,8 +9,8 @@ from omegaconf import DictConfig
 from omegaconf import OmegaConf
 from textwrap import dedent
 
-from embodied.envs.pybullet import PyBullet
-from omni_epic.robots import robot_dict
+from omni_epic.envs import robot_dict
+from ppo.wrappers import Jax2DWrapper
 from omni_epic.core.fm import FM
 
 
@@ -86,7 +86,7 @@ def parse_task_desc_from_env_code(env_code):
 	return task_desc
 
 def get_task_desc_from_env_path(env_path):
-	env = PyBullet(env_path=env_path, vision=False)._env
+	env = Jax2DWrapper(env_path=env_path)
 	task_desc = dedent(env.__doc__).strip()
 	return task_desc
 

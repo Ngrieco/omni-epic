@@ -14,10 +14,9 @@ import mediapy
 from openai import APIConnectionError, OpenAI, RateLimitError
 from PIL import Image
 
-from embodied.envs.pybullet import PyBullet
 from omni_epic.core import ParseError, prompts
-from omni_epic.envs import EnvironmentError, test_env, test_env_halts
-from omni_epic.robots import robot_dict
+from omni_epic.envs import robot_dict, test_env
+from ppo.wrappers import Jax2DWrapper
 
 logger = logging.getLogger(__name__)
 
@@ -336,9 +335,6 @@ class FM:
 				with open(env_path, "w") as f:
 					f.write(env_code)
 
-				# Test if environment halts
-				test_env_halts(env_path, timeout=10.0)
-
 				# Test environment
 				test_env(env_path)
 			except ParseError as e:
@@ -353,11 +349,10 @@ class FM:
 				logger.info(f"Generate environment code, iteration {iteration}: SUCESS")
 
 				# Visualize environment
-				env = PyBullet(env_path=env_path, vision=False)._env
-				renders, renders3p = env.visualize()
+				env = Jax2DWrapper(env_path=env_path)
+				renders = env.visualize()
 				env.close()
 				mediapy.write_video(os.path.join(task_path, "render.mp4"), renders)
-				mediapy.write_video(os.path.join(task_path, "render3p.mp4"), renders3p)
 
 				return iteration
 			logger.info(f"Generate environment code, iteration {iteration}: ERROR")

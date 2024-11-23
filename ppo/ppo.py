@@ -23,30 +23,41 @@ from ppo.wrappers import (
 
 class ActorCritic(nn.Module):
 	action_dim: Sequence[int]
-	activation: str = "tanh"
 
 	@nn.compact
-	def __call__(self, x):
-		if self.activation == "relu":
-			activation = nn.relu
-		else:
-			activation = nn.tanh
-		actor_mean = nn.Dense(256, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(x)
-		actor_mean = activation(actor_mean)
+	def __call__(self, x):  # 64 x 64 x 3
+		# Shared CNN
+		hidden = nn.Conv(32, kernel_size=(8, 8), strides=(4, 4), kernel_init=orthogonal(np.sqrt(2)))(x["image"])  # 16 x 16 x 32
+		hidden = nn.relu(hidden)
+		hidden = nn.Conv(64, kernel_size=(4, 4), strides=(2, 2), kernel_init=orthogonal(np.sqrt(2)))(hidden)  # 8 x 8 x 64
+		hidden = nn.relu(hidden)
+		hidden = nn.Conv(64, kernel_size=(3, 3), strides=(1, 1), kernel_init=orthogonal(np.sqrt(2)))(hidden)  # 8 x 8 x 64
+		hidden = nn.relu(hidden)
+		hidden = jnp.reshape(hidden, hidden.shape[:-3] + (-1,))  # Flatten 4096 = 8 * 8 * 64
+		hidden = nn.Dense(512, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(hidden)
+		hidden = nn.relu(hidden)
+
+		# Combine image and vector
+		hidden = jnp.concatenate([hidden, x["vector"]], axis=-1)
+
+		# Actor
+		actor_mean = nn.Dense(256, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(hidden)
+		actor_mean = nn.relu(actor_mean)
 		actor_mean = nn.Dense(256, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(
 			actor_mean
 		)
-		actor_mean = activation(actor_mean)
+		actor_mean = nn.relu(actor_mean)
 		actor_mean = nn.Dense(
 			self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0)
 		)(actor_mean)
 		actor_logtstd = self.param("log_std", nn.initializers.zeros, (self.action_dim,))
 		pi = distrax.MultivariateNormalDiag(actor_mean, jnp.exp(actor_logtstd))
 
-		critic = nn.Dense(256, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(x)
-		critic = activation(critic)
+		# Critic
+		critic = nn.Dense(256, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(hidden)
+		critic = nn.relu(critic)
 		critic = nn.Dense(256, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(critic)
-		critic = activation(critic)
+		critic = nn.relu(critic)
 		critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
 
 		return pi, jnp.squeeze(critic, axis=-1)
@@ -72,15 +83,15 @@ def make_train(config):
 	env = LogWrapper(env)
 	env = ClipAction(env)
 	env = VecEnv(env)
-	if config.normalize_env:
-		env = NormalizeVecObservation(env)
-		env = NormalizeVecReward(env, config.gamma)
 
 	def train(rng):
 		# INIT NETWORK
-		network = ActorCritic(env.action_space.shape[0], activation=config.activation)
+		network = ActorCritic(env.action_space.shape[0])
 		rng, _rng = jax.random.split(rng)
-		init_x = jnp.zeros(env.observation_space.shape)
+		init_x = {
+			"vector": jnp.zeros(env.observation_space["vector"].shape),
+			"image": jnp.zeros(env.observation_space["image"].shape),
+		}
 		network_params = network.init(_rng, init_x)
 		tx = optax.chain(
 			optax.clip_by_global_norm(config.max_grad_norm),
@@ -231,7 +242,7 @@ def make_train(config):
 
 				def callback(metric):
 					return_values = metric["returned_episode_returns"][-1]
-					print(f"episodic return={jnp.mean(return_values)}")
+					print(f"x/{int(num_updates)}: {jnp.mean(return_values)}")
 
 				jax.debug.callback(callback, metric)
 
@@ -244,3 +255,51 @@ def make_train(config):
 		return train_state
 
 	return train
+
+
+def make_eval(config):
+	env = Jax2DWrapper(config.env_path)
+	env = EpisodeWrapper(env, config.episode_length, config.action_repeat)
+	env = AutoResetWrapper(env)
+	env = LogWrapper(env)
+	env = ClipAction(env)
+	env = VecEnv(env)
+
+	def eval(rng, params):
+		# Initialize network
+		network = ActorCritic(env.action_space.shape[0])
+
+		# Initialize environment
+		rng, _rng = jax.random.split(rng)
+		reset_rng = jax.random.split(_rng, config.num_eval_envs)
+		env_state = env.reset(reset_rng)
+		obsv = env_state.observation
+
+		def _eval_step(carry, _):
+			env_state, last_obs, rng = carry
+
+			# Select action (deterministic)
+			rng, _rng = jax.random.split(rng)
+			pi, _ = network.apply(params, last_obs)
+			action = pi.mode()
+
+			# Step environment
+			env_state = env.step(env_state, action)
+			next_obs = env_state.observation
+
+			carry = (env_state, next_obs, rng)
+			return carry, env_state
+
+		# Run evaluation episodes
+		rng, _rng = jax.random.split(rng)
+		_, env_states = jax.lax.scan(
+			_eval_step, (env_state, obsv, _rng), None, config.episode_length
+		)
+
+		# Calculate mean return across episodes
+		returns = env_states.info["returned_episode_returns"][-1]
+		mean_return = jnp.mean(returns)
+
+		return env_states, mean_return
+
+	return eval

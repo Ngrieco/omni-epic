@@ -6,7 +6,7 @@ hydra:
 
 defaults:
   - _self_
-  - dreamer: dreamer_xxs
+  - ppo: ppo_xs
 
 logdir: '.'
 robot: r2d2
@@ -15,7 +15,7 @@ iterate_until_success_gen: False  # (added for the game) only iterate until a su
 error_max_iterations: 5  # maximum number of iterations to solve compilation errors for a task before giving up
 enable_moi: True  # whether to evaluate interestingness of generated task
 enable_sd: True  # whether to evaluate success on trained task
-train_agent: True  # whether to train the agent
+train_agent: False  # whether to train the agent
 train_from_ckpt: True  # whether to train the agent from checkpoint
 archive_from_ckpt: ''  # path to the checkpoint to initialize the archive from
 embedding_method: openai

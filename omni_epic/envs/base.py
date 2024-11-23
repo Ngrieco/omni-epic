@@ -33,8 +33,8 @@ class EnvState:
 
 
 class EnvBase:
-	screen_dim = (256, 256)
-	scene_size = 16  # 16 x 16
+	screen_dim = (64, 64)
+	scene_size = 16
 
 	action_max = 5.0
 
@@ -51,7 +51,7 @@ class EnvBase:
 		self.step_fn = jax.jit(self.physics_engine.step)
 
 		# Make renderer
-		self.renderer = make_render(self.static_sim_params, self.screen_dim)
+		self.renderer = make_render(self.static_sim_params, self.screen_dim, self.scene_size)
 
 		# Create scene
 		sim_state_init = create_empty_sim(
@@ -129,8 +129,18 @@ class EnvBase:
 
 	@cached_property
 	def observation_space(self):
-		high = np.inf * np.ones((6,), dtype=np.float32)
-		return gym.spaces.Box(-high, high, dtype=np.float32)
+		return gym.spaces.Dict({
+			"vector": gym.spaces.Box(
+				low=-np.ones(7, dtype=np.float32),
+				high=np.ones(7, dtype=np.float32),
+				dtype=np.float32
+			),
+			"image": gym.spaces.Box(
+				low=-np.ones(self.screen_dim + (3,), dtype=np.float32),
+				high=np.ones(self.screen_dim + (3,), dtype=np.float32),
+				dtype=np.float32
+			)
+		})
 
 	@partial(jax.jit, static_argnames=("self",))
 	def reset(self, env_state):
@@ -194,36 +204,24 @@ class EnvBase:
 			]
 			/ self.action_max
 		)
-		return {"energy_penalty": jnp.sum(action**2)}
+		return {"energy_penalty": -jnp.sum(action**2)}
 
 	@partial(jax.jit, static_argnames=("self",))
 	def get_observation(self, env_state, manifolds, action):
 		return {
 			"vector": jnp.concatenate(
 				[
-					env_state.sim_state.polygon.position[self.robot_idx],
-					env_state.sim_state.polygon.velocity[self.robot_idx],
-					jnp.expand_dims(env_state.sim_state.polygon.rotation[self.robot_idx], axis=0),
+					2 * env_state.sim_state.polygon.position[self.robot_idx] / self.scene_size - 1.0,
+					env_state.sim_state.polygon.velocity[self.robot_idx] / self.sim_params.clip_velocity,
+					jnp.cos(jnp.expand_dims(env_state.sim_state.polygon.rotation[self.robot_idx], axis=0)),
+					jnp.sin(jnp.expand_dims(env_state.sim_state.polygon.rotation[self.robot_idx], axis=0)),
 					jnp.expand_dims(
 						env_state.sim_state.polygon.angular_velocity[self.robot_idx], axis=0
-					),
+					) / self.sim_params.clip_angular_velocity,
 				]
 			),
-			"image": self.renderer(env_state),
+			"image": 2 * self.renderer(env_state) - 1.0,
 		}
-
-	# @partial(jax.jit, static_argnames=("self",))
-	# def get_observation(self, env_state, manifolds, action):
-	# 	return jnp.concatenate(
-	# 		[
-	# 			env_state.sim_state.polygon.position[self.robot_idx],
-	# 			env_state.sim_state.polygon.velocity[self.robot_idx],
-	# 			jnp.expand_dims(env_state.sim_state.polygon.rotation[self.robot_idx], axis=0),
-	# 			jnp.expand_dims(
-	# 				env_state.sim_state.polygon.angular_velocity[self.robot_idx], axis=0
-	# 			),
-	# 		]
-	# 	)
 
 	@partial(jax.jit, static_argnames=("self",))
 	def apply_action(self, actions, action):
@@ -328,12 +326,15 @@ class EnvBase:
 
 	@partial(jax.jit, static_argnames=("self",))
 	def dist_cc(self, env_state, idxa, idxb):
+		idxa = idxa - self.static_sim_params.num_polygons
+		idxb = idxb - self.static_sim_params.num_polygons
 		return jnp.linalg.norm(
 			env_state.sim_state.circle.position[idxa] - env_state.sim_state.circle.position[idxb]
 		)
 
 	@partial(jax.jit, static_argnames=("self",))
 	def dist_cp(self, env_state, idxa, idxb):
+		idxa = idxa - self.static_sim_params.num_polygons
 		return jnp.linalg.norm(
 			env_state.sim_state.circle.position[idxa] - env_state.sim_state.polygon.position[idxb]
 		)
@@ -357,6 +358,9 @@ class EnvBase:
 		def get_active(manifold):
 			return manifold.active
 
+		idxa = idxa - self.static_sim_params.num_polygons
+		idxb = idxb - self.static_sim_params.num_polygons
+
 		pair = (
 			(self.physics_engine.circle_circle_pairs[:, 0] == idxa)
 			& (self.physics_engine.circle_circle_pairs[:, 1] == idxb)
@@ -372,20 +376,20 @@ class EnvBase:
 			return manifold.active
 
 		pair = (
-			(self.physics_engine.circle_poly_pairs[:, 0] == idxa)
+			(self.physics_engine.circle_poly_pairs[:, 0] == (idxa - self.static_sim_params.num_polygons))
 			& (self.physics_engine.circle_poly_pairs[:, 1] == idxb)
 		) | (
-			(self.physics_engine.circle_poly_pairs[:, 0] == idxb)
+			(self.physics_engine.circle_poly_pairs[:, 0] == (idxb - self.static_sim_params.num_polygons))
 			& (self.physics_engine.circle_poly_pairs[:, 1] == idxa)
 		)
 		return jnp.any(pair * get_active(manifolds[1]))
 
 	@partial(jax.jit, static_argnames=("self",))
-	def transform_manifolds(self, sim_state):
+	def get_manifolds(self, env_state):
 		return (
-			jax.tree.map(lambda x: x[:, 0], sim_state.acc_rr_manifolds),
-			sim_state.acc_cr_manifolds,
-			sim_state.acc_cc_manifolds,
+			jax.tree.map(lambda x: x[:, 0], env_state.sim_state.acc_rr_manifolds),
+			env_state.sim_state.acc_cr_manifolds,
+			env_state.sim_state.acc_cc_manifolds,
 		)
 
 	@partial(jax.jit, static_argnames=("self",))
@@ -420,7 +424,7 @@ class EnvBase:
 		env_state = env_state.replace(sim_state=sim_state)
 		return env_state, idx
 
-	@partial(jax.jit, static_argnames=("self",))
+	# @partial(jax.jit, static_argnames=("self",))
 	def add_circle_to_scene(
 		self,
 		env_state,
@@ -491,9 +495,18 @@ class EnvBase:
 		env_state = env_state.replace(sim_state=sim_state)
 		return env_state, idx
 
+	def visualize(self):
+		key = jax.random.PRNGKey(0)
+		env_state = self.reset(key)
+		renders = []
+		for _ in range(100):
+			env_state = self.step(key, env_state, 0.0 * self.action_space.sample())
+			renders.append(self.renderer(env_state))
+		return renders
 
-def make_render(static_sim_params, screen_dim):
-	ppud = 16
+
+def make_render(static_sim_params, screen_dim, scene_size):
+	ppud = screen_dim[0] // scene_size  # pixels per unit distance
 	patch_size = 512
 	screen_padding = patch_size
 	full_screen_size = (

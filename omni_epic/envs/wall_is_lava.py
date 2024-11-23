@@ -16,7 +16,7 @@ class Env(EnvBase):
 	The task of the robot is to keep flying in the air without touching the walls, ceiling or floor.
 
 	Success:
-	The task is completed if the robot remains flying in the air.
+	The task is completed if the robot successfully avoids colliding with the walls, ceiling or floor for 200 steps.
 
 	Rewards:
 	The robot is rewarded for remaining flying in the air.
@@ -64,8 +64,4 @@ class Env(EnvBase):
 
 	@partial(jax.jit, static_argnames=("self",))
 	def get_success(self, env_state, manifolds, action):
-		return env_state.step > 200 & ~self.collision_pp(
-			manifolds, self.robot_idx, self.ceiling_idx
-		) & ~self.collision_pp(manifolds, self.robot_idx, self.floor_idx) & ~self.collision_pp(
-			manifolds, self.robot_idx, self.right_wall_idx
-		) & ~self.collision_pp(manifolds, self.robot_idx, self.left_wall_idx)
+		return env_state.step > 200

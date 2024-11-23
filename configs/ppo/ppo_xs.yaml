@@ -7,8 +7,8 @@ hydra:
 seed: 0
 
 total_timesteps: 1e6
+num_envs: 128
 num_steps: 10
-num_envs: 2048
 update_epochs: 4
 num_minibatches: 32
 learning_rate: 3e-4
@@ -20,11 +20,12 @@ clip_eps: 0.2
 ent_coef: 0.0
 vf_coef: 0.5
 
-activation: tanh
-
-env_path: /workdir/omni_epic/envs/wall_is_lava.py
+# env_path: /workdir/omni_epic/envs/destroy_tower.py
+# env_path: /workdir/omni_epic/envs/wall_is_lava.py
+# env_path: /workdir/omni_epic/envs/avoid_flying_boxes.py
+env_path: /workdir/omni_epic/envs/open_door.py
 episode_length: 1000
 action_repeat: 1
-normalize_env: False
 
 debug: True
+num_eval_envs: 10

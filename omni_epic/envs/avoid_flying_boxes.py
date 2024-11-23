@@ -11,18 +11,18 @@ class Env(EnvBase):
 	Avoid flying boxes.
 
 	Description:
-	- The robot is initialized mid-air in an empty room.
-	- The room has walls, a ceiling and a floor.
-	The task of the robot is to keep flying in the air without touching the walls, ceiling or floor.
+	- The robot is initialized mid-air in a room with only side walls (no ceiling or floor)
+	- There are 3 boxes that move around with random initial velocities
+	- The boxes are colored in a gradient from blue to red
 
 	Success:
-	The task is completed if the robot remains flying in the air.
+	The task is completed if the robot successfully avoids colliding with the boxes and stays within the bounds of the room for 200 steps.
 
 	Rewards:
-	The robot is rewarded for remaining flying in the air.
+	The robot is rewarded for staying alive.
 
 	Termination:
-	The task terminates if the robot touches the walls, ceiling or floor.
+	The task terminates if the robot collides with the boxes or goes out of bounds.
 	"""
 
 	def __init__(self):
@@ -40,7 +40,7 @@ class Env(EnvBase):
 
 			self.env_state_init, box_idx = self.add_rectangle_to_scene(
 				self.env_state_init,
-				position=jnp.array([5.0 + 3 * i, 16.0]),
+				position=jnp.array([5.0 + 3 * i, self.scene_size]),
 				dimensions=jnp.array([2.0, 2.0]),
 				density=0.1,
 				color=color,
@@ -57,7 +57,7 @@ class Env(EnvBase):
 		for i in range(3):
 			# Position
 			env_state = self.set_polygon_position(
-				env_state, self.box_indices[i], jnp.array([5.0 + 3 * i, 16.0])
+				env_state, self.box_indices[i], jnp.array([5.0 + 3 * i, self.scene_size])
 			)
 
 			# Velocity
@@ -82,7 +82,7 @@ class Env(EnvBase):
 		for i in range(3):
 			box_position = self.get_polygon_position(env_state, self.box_indices[i])
 			box_position = jnp.where(
-				box_position[1] < 0.0, jnp.array([box_position[0], 16.0]), box_position
+				box_position[1] < 0.0, jnp.array([box_position[0], self.scene_size]), box_position
 			)
 			env_state = self.set_polygon_position(env_state, self.box_indices[i], box_position)
 
@@ -100,12 +100,9 @@ class Env(EnvBase):
 			| self.collision_pp(manifolds, self.robot_idx, self.box_indices[1])
 			| self.collision_pp(manifolds, self.robot_idx, self.box_indices[2])
 			| (self.get_polygon_position(env_state, self.robot_idx)[1] < 0.0)
+			| (self.get_polygon_position(env_state, self.robot_idx)[1] > self.scene_size)
 		)
 
 	@partial(jax.jit, static_argnames=("self",))
 	def get_success(self, env_state, manifolds, action):
-		return env_state.step > 200 & ~self.collision_pp(
-			manifolds, self.robot_idx, self.box_indices[0]
-		) & ~self.collision_pp(manifolds, self.robot_idx, self.box_indices[1]) & ~self.collision_pp(
-			manifolds, self.robot_idx, self.box_indices[2]
-		)
+		return env_state.step > 200

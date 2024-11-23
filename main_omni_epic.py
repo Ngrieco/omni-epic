@@ -8,9 +8,9 @@ import hydra
 import numpy as np
 from omegaconf import DictConfig
 
-from main_dreamer import main_dreamer
+from main_ppo import main_ppo
 from omni_epic.core.fm import FM
-from omni_epic.robots import robot_dict
+from omni_epic.envs import robot_dict
 from rag_utils import get_similar_codepaths
 from run_utils import (
 	encode_image,
@@ -64,11 +64,11 @@ def main(config: DictConfig):
 	config_env_generator = config.environment_generator
 	config_moi = config.model_of_interestingness
 	config_success_detector = config.success_detector
-	config_dreamer = config.dreamer
+	config_ppo = config.ppo
 	config_task_iterator = config.task_iterator
 	if config_success_detector.use_vision:
 		config_task_iterator = config.task_iterator_vision
-	num_steps_per_task = config.dreamer.run.steps
+	num_steps_per_task = config.ppo.total_timesteps
 
 	# FM instance for each component
 	fm_task_generator = FM(config_task_generator)
@@ -273,9 +273,9 @@ def main(config: DictConfig):
 			if is_interesting:
 				if config.train_agent:
 					# Train agent on the generated task
-					dreamer_dir = os.path.join(task_dir, "dreamer/")
-					config_dreamer.logdir = dreamer_dir
-					config_dreamer.env.path = task_envpath
+					ppo_dir = os.path.join(task_dir, "ppo/")
+					config_ppo.logdir = ppo_dir
+					config_ppo.env.path = task_envpath
 					# If archive is not empty
 					# and not first few iterations used to create tasks from seeded task descriptions
 					if (
@@ -290,21 +290,21 @@ def main(config: DictConfig):
 							embedding_method=config.embedding_method,
 						)
 						ckpt_path = ckpt_paths[0]
-						ckpt_dir = os.path.join(os.path.dirname(ckpt_path), "dreamer/")
-						config_dreamer.run.from_checkpoint = os.path.join(
+						ckpt_dir = os.path.join(os.path.dirname(ckpt_path), "ppo/")
+						config_ppo.run.from_checkpoint = os.path.join(
 							ckpt_dir, "checkpoint.ckpt"
 						)
 						with open(os.path.join(ckpt_dir, "metrics.jsonl")) as f:
 							for line in f:
 								ckpt_steps = json.loads(line)["step"]
-						config_dreamer.run.steps = ckpt_steps + num_steps_per_task
-						metadata["train_from_ckpt"] = config_dreamer.run.from_checkpoint
+						config_ppo.run.steps = ckpt_steps + num_steps_per_task
+						metadata["train_from_ckpt"] = config_ppo.run.from_checkpoint
 
-					# Run Dreamer
-					main_dreamer(config_dreamer)
+					# Run ppo
+					main_ppo(config_ppo)
 
 					# Evaluate if the trained agent has successfully completed the task
-					render_dir = os.path.join(dreamer_dir, "eval")
+					render_dir = os.path.join(ppo_dir, "eval")
 					if config.enable_sd and config_success_detector.use_vision:
 						# Use VLM to evaluate task success
 						imagedir = os.path.join(task_dir, "input_images/")

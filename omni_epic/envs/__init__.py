@@ -1,71 +1,62 @@
-import multiprocessing
-
+from textwrap import dedent
 import numpy as np
+import jax
+import jax.numpy as jnp
 
-# Task descriptions
-task_dict = {
-	"go_up_stairs_0.05m": """
-Go up the stairs.
+from omni_epic.envs.base import EnvState
 
-The stairs have 10 steps going up. The steps are 1.0 meters in length, 5.0 meters in width, and 0.05 meters in height. The robot starts on the ground, 2.0 meters away from the bottom of the stairs.
-The task of the robot is to walk up the stairs, ensuring that it maintains its balance and does not fall.
-""".strip(),
-	"go_up_stairs_0.1m": """
-Go up the stairs.
 
-The stairs have 10 steps going up. The steps are 1.0 meters in length, 5.0 meters in width, and 0.1 meters in height. The robot starts on the ground, 2.0 meters away from the bottom of the stairs.
-The task of the robot is to walk up the stairs, ensuring that it maintains its balance and does not fall.
-""".strip(),
-	"hurdle_0.05m": """
-Run forward over one hurdle.
+robot_dict = {
+	 "r2d2": {
+		"robot_desc": dedent("""
+			R2D2 robot that can fly with thursters and measures 1.0 m in width and 1.5 m in height.
+			""").strip(),
+		"env_paths_example": [
+			"/workdir/omni_epic/envs/wall_is_lava.py",
+			"/workdir/omni_epic/envs/avoid_flying_boxes.py",
+			"/workdir/omni_epic/envs/destroy_tower.py",
+			"/workdir/omni_epic/envs/open_door.py",
+		],
+		"task_descs_init": [
+			dedent("""
+			Touch the green block.
 
-A hurdle is placed 2.0 meters ahead of the robot. The hurdle measures 0.1 meters in length, 5.0 meters in width, and 0.05 meters in height.
-The task of the robot is to run forward, leaping over the hurdle without touching or sidestepping it.
-""".strip(),
-	"hurdles_0.05m": """
-Run forward over a series of 5 hurdles.
+			Description:
+			- The robot is initialized mid-air in a room
+			- There is a green block placed at a random location in the room
+			- The robot needs to navigate to and touch the green block
 
-A series of 5 hurdles spaced 2.0 meters apart, is placed 2.0 meters ahead of the robot. Each hurdle measures 0.1 meters in length, 5.0 meters in width, and 0.05 meters in height.
-The task of the robot is to run forward, leaping over the hurdles without touching or sidestepping it.
-""".strip(),
-	"kick_ball_to_goal": """
-Kick the ball towards the goal.
+			Success:
+			The task is completed if the robot successfully touches the green block.
 
-A red ball is placed 2.0 meters from the robot. The goal is represented by a green box and is placed 5.0 meters from the robot.
-The task of the robot is to reach the ball as quickly as possible and kick the ball to push it towards the goal.
-""".strip(),
-	"kick_ball_to_goalposts": """
-Kick the ball towards the goal.
+			Rewards:
+			The robot is rewarded for getting closer to the green block.
 
-A red ball is placed 2.0 meters away from the robot. The goal is represented by two green posts and is placed 5.0 meters from the robot. The goalposts are spaced at least twice the ball's diameter apart.
-The task of the robot is to reach the ball as quickly as possible and kick the ball to push it towards the goal between the two goalposts.
-""".strip(),
-	"walk_backward_on_cylinder": """
-Walk backward on a cylinder.
+			Termination:
+			The task terminates if the robot touches the green block.
+			""").strip(),
+			dedent("""
+			Touch the green block while avoiding the red blocks.
 
-The robot is standing on a 2-meter-radius cylinder that can roll on the floor on the x axis.
-The task of the robot is to walk backward on the cylinder while not falling off.
-""".strip(),
-	"dance_on_platform": """
-Dance on a platform.
+			Description:
+			- The robot is initialized mid-air in a room
+			- There is a green block placed at a random location in the room
+			- There are 3 red blocks scattered around the room
+			- The robot needs to navigate to and touch the green block while avoiding the red blocks
 
-The robot is standing on a yellow platform that is 4.0 meters in length and width, and 0.1 meters in height above the ground.
-The task of the robot is to move its body, to dance to a periodic rhythm.
-""".strip(),
-	"cross_bridge_gap_0.05m": """
-Cross a pride-colored bridge with tiny gaps.
+			Success:
+			The task is completed if the robot successfully touches the green block.
 
-A 6-meter-long bridge with pride colors links the start platform to the end platform. The bridge has tiny gaps of 0.05 meters between each segment.
-The task of the robot is to cross the bridge as quickly as possible.
-""".strip(),
-	"cross_bridge_gap_0.1m": """
-Cross a pride-colored bridge with tiny gaps.
+			Rewards:
+			The robot gets a bonus of 100 points if it successfully touches the green block.
+			The robot is penalized by 100 points for touching any red block.
 
-A 6-meter-long bridge with pride colors links the start platform to the end platform. The bridge has tiny gaps of 0.1 meters between each segment.
-The task of the robot is to cross the bridge as quickly as possible.
-""".strip(),
+			Termination:
+			The task terminates if the robot successfully touches the green block.
+			""").strip(),
+		]
+	}
 }
-
 
 # Test Environment
 terminated_error = """
@@ -158,60 +149,55 @@ class EnvironmentError(Exception):
 
 def test_env(env_path):
 	# Test Env.__init__
-	from embodied.envs.pybullet import PyBullet
+	from ppo.wrappers import Jax2DWrapper
 
-	env = PyBullet(env_path=env_path, vision=False)._env
+	env = Jax2DWrapper(env_path)
 
 	try:
 		# Test Env.reset
-		observation = env.reset()
-		if not isinstance(observation, np.ndarray):
+		key = jax.random.PRNGKey(0)
+		env_state = env.reset(key)
+		if not isinstance(env_state, EnvState):
 			raise EnvironmentError(
-				f"Expected observation from Env.reset to be a numpy.ndarray, but received type '{type(observation).__name__}'. "
+				f"Expected observation from Env.reset to be a numpy.ndarray, but received type '{type(env_state).__name__}'. "
 				"Please ensure that observation from Env.reset returns a numpy.ndarray."
 			)
 
-		# Test robot collision after Env.reset
-		if env.is_robot_colliding():
-			raise EnvironmentError(robot_colliding_error)
+		# # Test robot collision after Env.reset
+		# if env.is_robot_colliding():
+		# 	raise EnvironmentError(robot_colliding_error)
 
 		# Test Env.step
-		observation, reward, terminated, truncated, info = env.step(0.0 * env.action_space.sample())
+		action = 0.0 * env.action_space.sample()
+		env_state = env.step(key, env_state, action)
 
-		if not isinstance(observation, np.ndarray):
+		if not isinstance(env_state, EnvState):
 			raise EnvironmentError(
-				f"Expected observation from Env.step to be a numpy.ndarray, but received type '{type(observation).__name__}'. "
+				f"Expected observation from Env.step to be a numpy.ndarray, but received type '{type(env_state).__name__}'. "
 				"Please ensure that observation from Env.step returns a numpy.ndarray."
 			)
 
-		if (
-			not isinstance(terminated, bool)
-			and not isinstance(terminated, np.bool_)
-			and not (isinstance(terminated, np.ndarray) and terminated.dtype == bool)
-		):
+		if not (isinstance(env_state.terminated, jax.Array) and (env_state.terminated.dtype == jnp.float32 or env_state.terminated.dtype == jnp.bool_)):
 			raise EnvironmentError(
-				f"Expected terminated from Env.step to be a boolean, but received type '{type(terminated).__name__}'. "
+				f"Expected terminated from Env.step to be a boolean, but received type '{type(env_state.terminated).__name__}'. "
 				"Please ensure that terminated from Env.step returns a boolean."
 			)
 
 		# Test Env.get_success
-		success = env.get_success()
-		if (
-			not isinstance(success, bool)
-			and not isinstance(success, np.bool_)
-			and not (isinstance(success, np.ndarray) and success.dtype == bool)
-		):
+		manifolds = env.get_manifolds(env_state)
+		success = env.get_success(env_state, manifolds, action)
+		if not (isinstance(success, jax.Array) and (success.dtype == jnp.float32 or success.dtype == jnp.bool_)):
 			raise EnvironmentError(
 				f"Expected success from Env.get_success to be a boolean, but received type '{type(success).__name__}'. "
 				"Please ensure that success from Env.get_success returns a boolean."
 			)
 
-		# Test robot collision after one Env.step call
-		if env.is_robot_colliding():
-			raise EnvironmentError(robot_colliding_error)
+		# # Test robot collision after one Env.step call
+		# if env.is_robot_colliding():
+		# 	raise EnvironmentError(robot_colliding_error)
 
 		# Test terminated after one Env.step call
-		if terminated:
+		if env_state.terminated:
 			raise EnvironmentError(terminated_error)
 
 		# Test success after one Env.step call
@@ -219,47 +205,11 @@ def test_env(env_path):
 			raise EnvironmentError(success_error)
 
 		for _ in range(100):
-			env.step(0.0 * env.action_space.sample())
-			if env.is_object_colliding():
-				raise EnvironmentError(object_colliding_error)
-			if env.is_robot_falling():
-				raise EnvironmentError(robot_falling_error)
+			env.step(key, env_state, 0.0 * env.action_space.sample())
 	except Exception as e:
 		raise e
 	finally:
 		env.close()
-
-
-def env_run_all(env_path):
-	# Test Env.__init__
-	from embodied.envs.pybullet import PyBullet
-
-	env = PyBullet(env_path=env_path, vision=False)._env
-
-	try:
-		# Test Env.reset
-		env.reset()
-
-		# Test Env.step
-		env.step(env.action_space.sample())
-
-		# Test Env.get_success
-		env.get_success()
-	except:
-		pass
-	finally:
-		env.close()
-
-
-def test_env_halts(env_path, timeout=10.0):
-	process = multiprocessing.Process(target=env_run_all, args=(env_path,))
-	process.start()
-
-	process.join(timeout)
-	if process.is_alive():
-		process.terminate()
-		process.join()
-		raise EnvironmentError(timeout_error)
 
 
 if __name__ == "__main__":
@@ -267,4 +217,3 @@ if __name__ == "__main__":
 	# env_path = "/workspace/src/env_error.py"
 	# env_path = "/workspace/src/env_good.py"
 
-	test_env_halts(env_path)
