@@ -33,7 +33,7 @@ class EnvState:
 
 
 class EnvBase:
-	screen_dim = (64, 64)
+	screen_dim = (256, 256)
 	scene_size = 16
 
 	action_max = 5.0

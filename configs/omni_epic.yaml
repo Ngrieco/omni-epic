@@ -10,7 +10,7 @@ defaults:
 
 logdir: '.'
 robot: r2d2
-iterations: 50
+iterations: 100
 iterate_until_success_gen: False  # (added for the game) only iterate until a successful task is found
 error_max_iterations: 5  # maximum number of iterations to solve compilation errors for a task before giving up
 enable_moi: True  # whether to evaluate interestingness of generated task
