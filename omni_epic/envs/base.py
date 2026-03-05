@@ -27,7 +27,7 @@ class Env(gym.Env):
 
 	def _init(self):
 		# Set additional search path
-		self._p.setAdditionalSearchPath("/workspace/src/omni_epic/envs/assets")
+		self._p.setAdditionalSearchPath("omni_epic/envs/assets")
 
 		# Reset simulation
 		self._p.resetSimulation()

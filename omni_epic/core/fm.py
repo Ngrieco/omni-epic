@@ -32,7 +32,7 @@ class FM:
 
 	def _create_client(self, client_name, model):
 		if client_name == "openai":
-			return OpenAI()
+			return OpenAI(default_headers={"openai-organization": "eo-cogniverse-ai-devtools"})
 		elif client_name == "anthropic":
 			return anthropic.Anthropic()
 		elif client_name == "google":
@@ -140,8 +140,20 @@ class FM:
 
 	def get_env_code(self, env_path):
 		"""Get environment code from env_path."""
+		import hydra
+		print(f"[FM] Reading environment code from: {env_path}")
+		# Handle relative paths by prepending original cwd if path is not absolute
+		if not os.path.isabs(env_path):
+			try:
+				original_cwd = hydra.utils.get_original_cwd()
+				env_path = os.path.join(original_cwd, env_path)
+				print(f"[FM] Resolved to absolute path: {env_path}")
+			except:
+				print(f"[FM] Not in Hydra context, using path as-is: {env_path}")
+				pass  # If not in Hydra context, use path as-is
 		env_code = open(env_path).read()
 		env_code_wrapped = self.wrap_code(env_code.strip())
+		print(f"[FM] Successfully read {len(env_code)} characters from file")
 		return env_code_wrapped
 
 	def get_env_codes(self, env_paths):
@@ -209,6 +221,10 @@ class FM:
 
 	def query_env_code(self, robot, task_desc, add_examples=True, env_paths_other=[]):
 		"""Query environment code for the given task description."""
+		print(f"\n[FM] ========== Querying Environment Code ==========")
+		print(f"[FM] Robot: {robot}")
+		print(f"[FM] Task description: {task_desc[:100]}..." if len(task_desc) > 100 else f"[FM] Task description: {task_desc}")
+		
 		# Create prompts
 		robot_desc = robot_dict[robot]["robot_desc"]
 		task_desc_wrapped = self.wrap_string(task_desc)
@@ -220,8 +236,10 @@ class FM:
 		user_prompt = prompts.query_env_code.user_prompt.format(ENV_CODES_EXAMPLE=env_codes_example, TASK_DESC=task_desc_wrapped)
 
 		# Prompt FM
+		print(f"[FM] Sending request to {self._client_name} model: {self._model}")
 		logger.info(f"Query environment code.\nTask description:\n{task_desc_wrapped}")
 		completion = self._chat_completion(system_prompt, user_prompt)
+		print(f"[FM] Received completion from model ({len(completion)} characters)")
 		return completion
 
 	def reflect_error(self, robot, env_code, error, add_examples=True, env_paths_other=[]):
@@ -247,55 +265,78 @@ class FM:
 		return completion
 
 	def iterate_on_errors(self, robot, task_desc, completion, task_path, add_examples=True, env_paths_other=[], iteration_max=5):
+		print(f"\n[FM] ========== Iterating on Errors ==========")
+		print(f"[FM] Task path: {task_path}")
+		print(f"[FM] Max iterations: {iteration_max}")
 		os.makedirs(task_path, exist_ok=True)
 		iteration = 0
 		while iteration <= iteration_max:
+			print(f"\n[FM] --- Iteration {iteration}/{iteration_max} ---")
 			try:
 				# Parse environment code
+				print(f"[FM] Parsing environment code from completion...")
 				env_code = self.parse_env_code(completion)
+				print(f"[FM] Successfully parsed environment code ({len(env_code)} characters)")
 
 				# Save environment code before replacing docstring because it can raise an error if code is incorrect
 				env_path = os.path.join(task_path, f"env_{iteration}.py")
+				print(f"[FM] Saving environment code to: {env_path}")
 				with open(env_path, "w") as f:
 					f.write(env_code)
 
 				# Replace docstring
+				print(f"[FM] Updating environment docstring...")
 				env_code = update_env_docstring(env_code, task_desc)
 
 				# Save environment code
 				env_path = os.path.join(task_path, f"env_{iteration}.py")
 				with open(env_path, "w") as f:
 					f.write(env_code)
+				print(f"[FM] Environment code saved successfully")
 
 				# Test if environment halts
+				print(f"[FM] Testing if environment halts (timeout: 10s)...")
 				test_env_halts(env_path, timeout=10.)
+				print(f"[FM] Environment halts test passed")
 
 				# Test environment
+				print(f"[FM] Testing environment...")
 				test_env(env_path)
+				print(f"[FM] Environment test passed")
 			except ParseError as e:
 				env_code = str(None)
 				error = str(e) + f"\n\"\"\"\n\nTask description:\n\"\"\"{task_desc}"
+				print(f"[FM] ParseError: {str(e)}")
 			except EnvironmentError as e:
 				error = str(e)
+				print(f"[FM] EnvironmentError: {str(e)}")
 			except Exception:
 				error = traceback.format_exc()
 				error = self.filter_error(error)
+				print(f"[FM] Exception occurred:\n{error}")
 			else:
+				print(f"[FM] ✓ Generate environment code, iteration {iteration}: SUCCESS")
 				logger.info(f"Generate environment code, iteration {iteration}: SUCESS")
 
 				# Visualize environment
+				print(f"[FM] Visualizing environment...")
 				env = PyBullet(env_path=env_path, vision=False)._env
 				renders, renders3p = env.visualize()
 				env.close()
+				print(f"[FM] Saving visualization videos...")
 				mediapy.write_video(os.path.join(task_path, "render.mp4"), renders)
 				mediapy.write_video(os.path.join(task_path, "render3p.mp4"), renders3p)
+				print(f"[FM] Visualization complete")
 
 				return iteration
+			print(f"[FM] ✗ Generate environment code, iteration {iteration}: ERROR")
 			logger.info(f"Generate environment code, iteration {iteration}: ERROR")
 
 			# Reflect on error
+			print(f"[FM] Reflecting on error and requesting fix...")
 			completion = self.reflect_error(robot, env_code, error, add_examples=add_examples, env_paths_other=env_paths_other)
 			iteration += 1
+		print(f"[FM] ✗ Failed to generate valid environment code after {iteration_max} iterations")
 		return -1
 
 	def generate_env_code(self, robot, task_desc, task_path, add_examples=True, env_paths_other=[], iteration_max=5):

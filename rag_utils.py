@@ -190,17 +190,17 @@ def get_similar_codepaths(chosen_codepath, other_codepaths, num_returns=5, embed
 
 
 if __name__ == "__main__":
-	chosen_codepath = "/workspace/src/omni_epic/envs/ant/cross_bridge.py"
+	chosen_codepath = "omni_epic/envs/ant/cross_bridge.py"
 	other_codepaths = [
-			"/workspace/src/omni_epic/envs/ant/cross_bridge.py",
-			"/workspace/src/omni_epic/envs/ant/go_to_box.py",
-			"/workspace/src/omni_epic/envs/ant/kick_ball.py",
-			"/workspace/src/omni_epic/envs/ant/maze.py",
-			"/workspace/src/omni_epic/envs/ant/go_forward.py",
-			"/workspace/src/omni_epic/envs/ant/walk_on_cylinder.py",
-			"/workspace/src/omni_epic/envs/ant/go_down_stairs.py",
-			"/workspace/src/omni_epic/envs/ant/cross_lava.py",
-			"/workspace/src/omni_epic/envs/ant/balance_board.py",
+			"omni_epic/envs/ant/cross_bridge.py",
+			"omni_epic/envs/ant/go_to_box.py",
+			"omni_epic/envs/ant/kick_ball.py",
+			"omni_epic/envs/ant/maze.py",
+			"omni_epic/envs/ant/go_forward.py",
+			"omni_epic/envs/ant/walk_on_cylinder.py",
+			"omni_epic/envs/ant/go_down_stairs.py",
+			"omni_epic/envs/ant/cross_lava.py",
+			"omni_epic/envs/ant/balance_board.py",
 		]
 	similar_codepaths, similar_indices = get_similar_codepaths(chosen_codepath, other_codepaths, embedding_method="mistral")
 	print(similar_codepaths)

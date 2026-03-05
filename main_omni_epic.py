@@ -40,16 +40,34 @@ def init_archive(archive_from_ckpt):
 
 @hydra.main(version_base=None, config_path="configs/", config_name="omni_epic")
 def main(config: DictConfig):
+	print("\n" + "="*80)
+	print("OMNI-EPIC: Starting Task Generation and Training Pipeline")
+	print("="*80 + "\n")
+	
 	robot = config.robot
 	robot_desc = robot_dict[robot]["robot_desc"]
 	task_key_base = 'task'
 	add_examples = config.add_examples
+	
+	print(f"[MAIN] Configuration:")
+	print(f"[MAIN]   Robot: {robot}")
+	print(f"[MAIN]   Add examples: {add_examples}")
+	print(f"[MAIN]   Iterations: {config.iterations}")
+	print(f"[MAIN]   Log directory: {config.logdir}")
 
 	# Create archive
 	task_descs_init = robot_dict[robot]["task_descs_init"]
 	archive_codepaths, archive_failedgens, archive_failedint, archive_failedtrain = init_archive(config.archive_from_ckpt)
 	init_archive_size = len(task_descs_init)
 	prev_num_iterations = len(archive_codepaths) + len(archive_failedgens) + len(archive_failedint) + len(archive_failedtrain)
+	
+	print(f"\n[MAIN] Archive Status:")
+	print(f"[MAIN]   Initial task descriptions: {len(task_descs_init)}")
+	print(f"[MAIN]   Successful tasks: {len(archive_codepaths)}")
+	print(f"[MAIN]   Failed generations: {len(archive_failedgens)}")
+	print(f"[MAIN]   Failed interestingness: {len(archive_failedint)}")
+	print(f"[MAIN]   Failed training: {len(archive_failedtrain)}")
+	print(f"[MAIN]   Previous iterations: {prev_num_iterations}")
 
 	# Configs for each component
 	config_task_generator = config.task_generator
@@ -93,11 +111,19 @@ def main(config: DictConfig):
 		task_key = f'{task_key_base}_{iteration}'
 		task_dir = os.path.join(config.logdir, f'{task_key}')
 		metadata = {}
+		
+		print("\n" + "="*80)
+		print(f"ITERATION {iteration}")
+		print("="*80)
+		print(f"[MAIN] Task key: {task_key}")
+		print(f"[MAIN] Task directory: {task_dir}")
 
 		taskgen_example_paths = copy.copy(archive_codepaths)
 		if iteration < len(task_descs_init):
 			# First few iterations used to create tasks from seeded task descriptions
+			print(f"\n[MAIN] Using seeded task description (iteration {iteration}/{len(task_descs_init)-1})")
 			task_desc = task_descs_init[iteration]
+			print(f"[MAIN] Task: {task_desc[:150]}..." if len(task_desc) > 150 else f"[MAIN] Task: {task_desc}")
 			taskgen_completion = fm_env_generator.query_env_code(robot, task_desc)
 			metadata["init_task_desc"] = task_desc
 			iterations_spent_on_init_tasks += 1
@@ -195,6 +221,7 @@ def main(config: DictConfig):
 			taskgen_completion = fm_env_generator.query_env_code(robot, task_desc, add_examples=add_examples, env_paths_other=taskgen_example_paths + taskgen_add_example_paths)
 
 		# Iterate on compilation errors for a max number of gens
+		print(f"\n[MAIN] Starting environment code generation...")
 		gen_num = fm_env_generator.iterate_on_errors(
 			robot,
 			task_desc,
@@ -207,6 +234,7 @@ def main(config: DictConfig):
 
 		# If generation was successful
 		if gen_num >= 0:
+			print(f"\n[MAIN] ✓ Environment code generated successfully after {gen_num} iterations")
 			# Save the generated task envpath
 			task_envpath = os.path.abspath(os.path.join(task_dir, f'env_{gen_num}.py'))
 			metadata['envpath'] = task_envpath
@@ -232,8 +260,10 @@ def main(config: DictConfig):
 				is_interesting = True
 
 			if is_interesting:
+				print(f"[MAIN] Task is interesting, proceeding with training")
 				if config.train_agent:
 					# Train agent on the generated task
+					print(f"\n[MAIN] Starting agent training...")
 					dreamer_dir = os.path.join(task_dir, 'dreamer/')
 					config_dreamer.logdir = dreamer_dir
 					config_dreamer.env.path = task_envpath
@@ -285,6 +315,8 @@ def main(config: DictConfig):
 				metadata['task_success'] = task_success
 				if task_success:
 					# Add task to the archive
+					print(f"\n[MAIN] ✓ Task completed successfully!")
+					print(f"[MAIN] Adding task to archive (total: {len(archive_codepaths) + 1})")
 					archive_codepaths.append(task_envpath)
 					iterate_same_task_count = 0
 					taskgen_choose_probs = np.append(taskgen_choose_probs, 0)
@@ -293,6 +325,7 @@ def main(config: DictConfig):
 						stop_iteration = True
 				else:
 					# Iterate on the same task the next iteration
+					print(f"\n[MAIN] ✗ Task failed, will iterate on same task")
 					if iterate_same_task_count < config_task_iterator.max_iterations:
 						iterate_same_task = True
 					else:
@@ -301,9 +334,11 @@ def main(config: DictConfig):
 
 			else:
 				# If task is not interesting, add the task to the reject archive
+				print(f"\n[MAIN] ✗ Task not interesting, adding to failed archive")
 				archive_failedint.append(task_envpath)
 		else:
 			# If generation failed, add the task to the reject archive
+			print(f"\n[MAIN] ✗ Environment code generation failed")
 			archive_failedgens.append(task_dir)
 			taskgen_choose_probs = prev_taskgen_choose_probs  # Reset taskgen_choose_probs
 

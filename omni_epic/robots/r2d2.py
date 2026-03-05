@@ -22,7 +22,7 @@ class R2D2Robot(URDFRobot):
 	jump_velocity = 5.0
 
 	def __init__(self, bullet_client):
-		urdf = "/workspace/src/omni_epic/robots/assets/r2d2.urdf"
+		urdf = "omni_epic/robots/assets/r2d2.urdf"
 		super().__init__(bullet_client, urdf, base_position=[0., 0., 0.5], base_orientation=[0., 0., np.sqrt(2)/2, -np.sqrt(2)/2], self_collision=False)
 
 	@functools.cached_property
