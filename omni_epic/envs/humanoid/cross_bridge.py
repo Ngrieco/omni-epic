@@ -4,11 +4,11 @@ from omni_epic.envs.humanoid.base import HumanoidEnv
 
 class Env(HumanoidEnv):
     """
-    Cross a pride-colored bridge to reach a platform.
+    Cross a rainbow-colored bridge to reach a platform.
 
     Description:
     - A start platform and an end platform (each 3 m in size and 0.5 m in thickness) are placed 30 m apart.
-    - The two platforms are connected by a bridge (1 m wide) divided in multiple segments. Each segment has a different color corresponding to the pride colors.
+    - The two platforms are connected by a bridge (1 m wide) divided in multiple segments. Each segment has a different color corresponding to the rainbow colors.
     The robot is initialized on the start platform.
     The task of the robot is to cross the bridge to reach the end platform as fast as possible.
 
@@ -37,7 +37,7 @@ class Env(HumanoidEnv):
         # Init bridge
         self.bridge_length = self.platform_end_position[0] - self.platform_start_position[0] - self.platform_size[0]
         self.bridge_width = 1.
-        pride_colors = [
+        rainbow_colors = [
             [1.0, 0.0, 0.0, 1.],  # Red
             [1.0, 0.5, 0.0, 1.],  # Orange
             [1.0, 1.0, 0.0, 1.],  # Yellow
@@ -47,11 +47,11 @@ class Env(HumanoidEnv):
         ]
 
         # Segment length
-        num_colors = len(pride_colors)
+        num_colors = len(rainbow_colors)
         segment_size = self.bridge_length / num_colors
 
         # Create segments
-        for i, color in enumerate(pride_colors):
+        for i, color in enumerate(rainbow_colors):
             segment_id = self.create_box(mass=0., half_extents=[segment_size / 2, self.bridge_width / 2, self.platform_size[2] / 2], position=[self.platform_start_position[0] + self.platform_size[0] / 2 + segment_size / 2 + i * segment_size, self.platform_start_position[1], self.platform_start_position[2]], color=color)
             self._p.changeDynamics(bodyUniqueId=segment_id, linkIndex=-1, lateralFriction=0.8, restitution=0.5)
 

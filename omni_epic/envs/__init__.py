@@ -61,16 +61,16 @@ The task of the robot is to move its body, to dance to a periodic rhythm.
 """.strip(),
 
 	"cross_bridge_gap_0.05m": """
-Cross a pride-colored bridge with tiny gaps.
+Cross a rainbow-colored bridge with tiny gaps.
 
-A 6-meter-long bridge with pride colors links the start platform to the end platform. The bridge has tiny gaps of 0.05 meters between each segment.
+A 6-meter-long bridge with rainbow colors links the start platform to the end platform. The bridge has tiny gaps of 0.05 meters between each segment.
 The task of the robot is to cross the bridge as quickly as possible.
 """.strip(),
 
 	"cross_bridge_gap_0.1m": """
-Cross a pride-colored bridge with tiny gaps.
+Cross a rainbow-colored bridge with tiny gaps.
 
-A 6-meter-long bridge with pride colors links the start platform to the end platform. The bridge has tiny gaps of 0.1 meters between each segment.
+A 6-meter-long bridge with rainbow colors links the start platform to the end platform. The bridge has tiny gaps of 0.1 meters between each segment.
 The task of the robot is to cross the bridge as quickly as possible.
 """.strip(),
 }
@@ -164,13 +164,17 @@ class EnvironmentError(Exception):
 	pass
 
 def test_env(env_path):
+	print(f"[ENV_TEST] Creating PyBullet environment from: {env_path}")
 	# Test Env.__init__
 	from embodied.envs.pybullet import PyBullet
 	env = PyBullet(env_path=env_path, vision=False)._env
+	print(f"[ENV_TEST] Environment created successfully")
 
 	try:
 		# Test Env.reset
+		print(f"[ENV_TEST] Calling env.reset()...")
 		observation = env.reset()
+		print(f"[ENV_TEST] env.reset() returned observation shape: {observation.shape}")
 		if not isinstance(observation, np.ndarray):
 			raise EnvironmentError(
 				f"Expected observation from Env.reset to be a numpy.ndarray, but received type '{type(observation).__name__}'. "
@@ -178,11 +182,15 @@ def test_env(env_path):
 			)
 
 		# Test robot collision after Env.reset
+		print(f"[ENV_TEST] Checking for robot collisions after reset...")
 		if env.is_robot_colliding():
 			raise EnvironmentError(robot_colliding_error)
+		print(f"[ENV_TEST] No robot collisions detected")
 
 		# Test Env.step
+		print(f"[ENV_TEST] Calling env.step() with zero action...")
 		observation, reward, terminated, truncated, info = env.step(0. * env.action_space.sample())
+		print(f"[ENV_TEST] env.step() returned - reward: {reward:.4f}, terminated: {terminated}, truncated: {truncated}")
 
 		if not isinstance(observation, np.ndarray):
 			raise EnvironmentError(
@@ -197,7 +205,9 @@ def test_env(env_path):
 			)
 
 		# Test Env.get_success
+		print(f"[ENV_TEST] Checking task success condition...")
 		success = env.get_success()
+		print(f"[ENV_TEST] Task success: {success}")
 		if not isinstance(success, bool) and not isinstance(success, np.bool_) and not (isinstance(success, np.ndarray) and success.dtype == bool):
 			raise EnvironmentError(
 				f"Expected success from Env.get_success to be a boolean, but received type '{type(success).__name__}'. "
@@ -216,15 +226,20 @@ def test_env(env_path):
 		if success:
 			raise EnvironmentError(success_error)
 
-		for _ in range(100):
+		print(f"[ENV_TEST] Running 100 simulation steps to check for issues...")
+		for i in range(100):
+			if i % 20 == 0:
+				print(f"[ENV_TEST] Step {i}/100...")
 			env.step(0. * env.action_space.sample())
 			if env.is_object_colliding():
 				raise EnvironmentError(object_colliding_error)
 			if env.is_robot_falling():
 				raise EnvironmentError(robot_falling_error)
+		print(f"[ENV_TEST] All 100 steps completed successfully")
 	except Exception as e:
 		raise e
 	finally:
+		print(f"[ENV_TEST] Closing environment")
 		env.close()
 
 def env_run_all(env_path):

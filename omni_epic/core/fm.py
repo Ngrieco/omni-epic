@@ -301,8 +301,13 @@ class FM:
 
 				# Test environment
 				print(f"[FM] Testing environment...")
-				test_env(env_path)
-				print(f"[FM] Environment test passed")
+				try:
+					test_env(env_path)
+					print(f"[FM] Environment test passed")
+				except Exception as test_error:
+					print(f"[FM] Environment test failed with error:")
+					print(f"[FM] {str(test_error)}")
+					raise
 			except ParseError as e:
 				env_code = str(None)
 				error = str(e) + f"\n\"\"\"\n\nTask description:\n\"\"\"{task_desc}"
@@ -323,10 +328,17 @@ class FM:
 				env = PyBullet(env_path=env_path, vision=False)._env
 				renders, renders3p = env.visualize()
 				env.close()
-				print(f"[FM] Saving visualization videos...")
+				print(f"[FM] Saving visualization videos and GIFs...")
+				# Save as MP4
 				mediapy.write_video(os.path.join(task_path, "render.mp4"), renders)
 				mediapy.write_video(os.path.join(task_path, "render3p.mp4"), renders3p)
-				print(f"[FM] Visualization complete")
+				# Save as GIF
+				import imageio
+				imageio.mimsave(os.path.join(task_path, "render.gif"), renders, fps=30, loop=0)
+				imageio.mimsave(os.path.join(task_path, "render3p.gif"), renders3p, fps=30, loop=0)
+				print(f"[FM] Visualization complete (saved as MP4 and GIF)")
+				print(f"[FM]   - {os.path.join(task_path, 'render.gif')}")
+				print(f"[FM]   - {os.path.join(task_path, 'render3p.gif')}")
 
 				return iteration
 			print(f"[FM] ✗ Generate environment code, iteration {iteration}: ERROR")

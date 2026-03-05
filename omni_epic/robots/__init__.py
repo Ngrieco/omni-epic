@@ -24,11 +24,11 @@ robot_dict = {
 		],
 		"task_descs_init": [
 			dedent("""
-			Cross a pride-colored bridge with gaps to reach a platform.
+			Cross a rainbow-colored bridge with gaps to reach a platform.
 
 			Description:
 			- A start platform and an end platform (each 3 m in size and 0.5 m in thickness) are placed 30 m apart.
-			- The two platforms are connected by a bridge (2 m wide) divided in multiple segments. Each segment has a different color corresponding to the pride colors.
+			- The two platforms are connected by a bridge (2 m wide) divided in multiple segments. Each segment has a different color corresponding to the rainbow colors.
 			- The segments are separated by gaps measuring 0.1 m.
 			The robot is initialized on the start platform.
 			The task of the robot is to cross the bridge to reach the end platform as fast as possible.
@@ -109,11 +109,11 @@ robot_dict = {
 		],
 		"task_descs_init": [
 			dedent("""
-			Cross a pride-colored bridge with gaps to reach a platform.
+			Cross a rainbow-colored bridge with gaps to reach a platform.
 
 			Description:
 			- A start platform and an end platform (each 3 m in size and 0.5 m in thickness) are placed 30 m apart.
-			- The two platforms are connected by a bridge (2 m wide) divided in multiple segments. Each segment has a different color corresponding to the pride colors.
+			- The two platforms are connected by a bridge (2 m wide) divided in multiple segments. Each segment has a different color corresponding to the rainbow colors.
 			- The segments are separated by gaps measuring 0.1 m.
 			The robot is initialized on the start platform.
 			The task of the robot is to cross the bridge to reach the end platform as fast as possible.
@@ -193,11 +193,11 @@ robot_dict = {
 		],
 		"task_descs_init": [
 			dedent("""
-			Cross a pride-colored bridge with gaps to reach a platform.
+			Cross a rainbow-colored bridge with gaps to reach a platform.
 
 			Description:
 			- A start platform and an end platform (each 3 m in size and 0.5 m in thickness) are placed 50 m apart.
-			- The two platforms are connected by a bridge (2 m wide) divided in multiple segments. Each segment has a different color corresponding to the pride colors.
+			- The two platforms are connected by a bridge (2 m wide) divided in multiple segments. Each segment has a different color corresponding to the rainbow colors.
 			- The segments are separated by gaps measuring 2 m.
 			The robot is initialized on the start platform.
 			The task of the robot is to cross the bridge to reach the end platform as fast as possible.
