@@ -1,7 +1,7 @@
 import logging
 
 import numpy as np
-from gym.utils import seeding
+from gymnasium.utils import seeding
 import pybullet
 logger = logging.getLogger(__name__)
 

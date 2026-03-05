@@ -180,16 +180,16 @@ robot_dict = {
 			- The initial orientation of the robot is given by `robot.links["base"].orientation_init`, which aligns the robot to face toward the positive x-axis.
 			""").strip(),
 		"env_paths_example": [
-			"omni_epic/envs/r2d2/balance_board.py",
+			# "omni_epic/envs/r2d2/balance_board.py",
 			"omni_epic/envs/r2d2/cross_bridge.py",
-			"omni_epic/envs/r2d2/cross_lava.py",
-			"omni_epic/envs/r2d2/go_down_stairs.py",
-			"omni_epic/envs/r2d2/go_to_box.py",
+			# "omni_epic/envs/r2d2/cross_lava.py",
+			# "omni_epic/envs/r2d2/go_down_stairs.py",
+			# "omni_epic/envs/r2d2/go_to_box.py",
 			"omni_epic/envs/r2d2/kick_ball.py",
 			# "omni_epic/envs/r2d2/maze.py",
-			"omni_epic/envs/r2d2/open_door.py",
+			# "omni_epic/envs/r2d2/open_door.py",
 			# "omni_epic/envs/r2d2/go_forward.py",
-			"omni_epic/envs/r2d2/walk_on_cylinder.py",
+			# "omni_epic/envs/r2d2/walk_on_cylinder.py",
 		],
 		"task_descs_init": [
 			dedent("""

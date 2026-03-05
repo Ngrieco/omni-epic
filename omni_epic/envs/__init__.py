@@ -164,11 +164,28 @@ class EnvironmentError(Exception):
 	pass
 
 def test_env(env_path):
-	print(f"[ENV_TEST] Creating PyBullet environment from: {env_path}")
+	print(f"[ENV_TEST] Creating PyBullet environment from: {env_path}", flush=True)
 	# Test Env.__init__
-	from embodied.envs.pybullet import PyBullet
-	env = PyBullet(env_path=env_path, vision=False)._env
-	print(f"[ENV_TEST] Environment created successfully")
+	import sys
+	try:
+		print(f"[ENV_TEST] Importing PyBullet wrapper...", flush=True)
+		from embodied.envs.pybullet import PyBullet
+		print(f"[ENV_TEST] PyBullet wrapper imported successfully", flush=True)
+		print(f"[ENV_TEST] Creating PyBullet instance...", flush=True)
+		pybullet_wrapper = PyBullet(env_path=env_path, vision=False)
+		print(f"[ENV_TEST] PyBullet instance created, accessing ._env...", flush=True)
+		env = pybullet_wrapper._env
+		print(f"[ENV_TEST] Environment created successfully", flush=True)
+	except Exception as e:
+		print(f"[ENV_TEST] FAILED to create environment!", flush=True)
+		print(f"[ENV_TEST] Error type: {type(e).__name__}", flush=True)
+		print(f"[ENV_TEST] Error: {str(e)}", flush=True)
+		import traceback
+		print(f"[ENV_TEST] Traceback:", flush=True)
+		traceback.print_exc()
+		sys.stdout.flush()
+		sys.stderr.flush()
+		raise EnvironmentError(f"Failed to create environment: {str(e)}")
 
 	try:
 		# Test Env.reset
@@ -262,14 +279,25 @@ def env_run_all(env_path):
 		env.close()
 
 def test_env_halts(env_path, timeout=10.):
+	print(f"[ENV_TEST] Checking if environment halts (timeout: {timeout}s)...", flush=True)
 	process = multiprocessing.Process(target=env_run_all, args=(env_path,))
 	process.start()
 
 	process.join(timeout)
 	if process.is_alive():
+		print(f"[ENV_TEST] Environment did NOT halt within {timeout}s - terminating process", flush=True)
 		process.terminate()
 		process.join()
 		raise EnvironmentError(timeout_error)
+	
+	# Check if process exited with error
+	if process.exitcode != 0:
+		print(f"[ENV_TEST] WARNING: Halt test process exited with code {process.exitcode}", flush=True)
+		print(f"[ENV_TEST] This indicates a crash during environment initialization", flush=True)
+		print(f"[ENV_TEST] Likely causes: segfault in PyBullet, import error, or exception in Env.__init__", flush=True)
+		print(f"[ENV_TEST] Attempting full test to get more details...", flush=True)
+	else:
+		print(f"[ENV_TEST] Environment halts correctly", flush=True)
 
 
 if __name__ == "__main__":

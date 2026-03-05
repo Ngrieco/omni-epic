@@ -3,7 +3,7 @@ import functools
 
 import numpy as np
 from scipy.spatial.transform import Rotation
-import gym.spaces
+import gymnasium.spaces
 import pybullet
 import pybullet_data
 
@@ -32,12 +32,12 @@ class HumanoidRobot(MJCFRobot):
 	@functools.cached_property
 	def action_space(self):
 		high = np.ones((17,), dtype=np.float32)
-		return gym.spaces.Box(-high, high, dtype=np.float32)
+		return gymnasium.spaces.Box(-high, high, dtype=np.float32)
 
 	@functools.cached_property
 	def observation_space(self):
 		high = np.inf * np.ones((46,), dtype=np.float32)
-		return gym.spaces.Box(-high, high, dtype=np.float32)
+		return gymnasium.spaces.Box(-high, high, dtype=np.float32)
 
 	def reset(self, seed=None):
 		super().reset(seed=seed)

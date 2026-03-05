@@ -2,7 +2,7 @@ import functools
 
 import numpy as np
 from scipy.spatial.transform import Rotation
-import gym.spaces
+import gymnasium.spaces
 
 from omni_epic.robots.base import URDFRobot, angle_between_vectors_3d
 
@@ -28,12 +28,12 @@ class R2D2Robot(URDFRobot):
 	@functools.cached_property
 	def action_space(self):
 		# Four actions: do nothing, move forward, move backward, rotate clockwise, rotate counterclockwise, jump
-		return gym.spaces.Discrete(6)
+		return gymnasium.spaces.Discrete(6)
 
 	@functools.cached_property
 	def observation_space(self):
 		high = np.inf * np.ones((5,), dtype=np.float32)
-		return gym.spaces.Box(-high, high, dtype=np.float32)
+		return gymnasium.spaces.Box(-high, high, dtype=np.float32)
 
 	def reset(self, seed=None):
 		super().reset(seed=seed)

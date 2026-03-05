@@ -2,7 +2,7 @@ import importlib
 
 import numpy as np
 from scipy.spatial.transform import Rotation
-import gym
+import gymnasium as gym
 import pybullet
 from pybullet_utils import bullet_client
 import pybullet_data
@@ -17,17 +17,17 @@ class Env(gym.Env):
 	def __init__(self):
 		self._p = bullet_client.BulletClient(connection_mode=pybullet.DIRECT)
 
-		# Load EGL renderer plugin
-		self._p.setAdditionalSearchPath(pybullet_data.getDataPath())
-		egl = importlib.util.find_spec("eglRenderer")
-		self._p.loadPlugin(egl.origin, "_eglRendererPlugin")
+		# Load EGL renderer plugin (commented out - causes segfault in some environments)
+		# self._p.setAdditionalSearchPath(pybullet_data.getDataPath())
+		# egl = importlib.util.find_spec("eglRenderer")
+		# self._p.loadPlugin(egl.origin, "_eglRendererPlugin")
 
 		# Init world
 		self._init()
 
 	def _init(self):
 		# Set additional search path
-		self._p.setAdditionalSearchPath("omni_epic/envs/assets")
+		self._p.setAdditionalSearchPath("/workspace/src/omni_epic/envs/assets")
 
 		# Reset simulation
 		self._p.resetSimulation()

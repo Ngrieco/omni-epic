@@ -1,7 +1,7 @@
 import functools
 
 import embodied
-import gym
+import gymnasium as gym
 import numpy as np
 
 
@@ -96,7 +96,7 @@ class FromGym(embodied.Env):
     result = {}
     for key, value in nest.items():
       key = prefix + '/' + key if prefix else key
-      if isinstance(value, gym.spaces.Dict):
+      if isinstance(value, gymnasium.spaces.Dict):
         value = value.spaces
       if isinstance(value, dict):
         result.update(self._flatten(value, key))
