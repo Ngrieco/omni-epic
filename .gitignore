@@ -6,6 +6,8 @@ apptainer/container*
 # Hydra
 output/
 
+/omni-epic
+
 # Code as Policies
 notebooks/ur5e
 notebooks/robotiq_2f_85

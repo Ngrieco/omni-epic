@@ -280,7 +280,10 @@ def env_run_all(env_path):
 
 def test_env_halts(env_path, timeout=10.):
 	print(f"[ENV_TEST] Checking if environment halts (timeout: {timeout}s)...", flush=True)
-	process = multiprocessing.Process(target=env_run_all, args=(env_path,))
+	# Use 'spawn' start method to avoid inheriting parent process state (JAX, google.generativeai, etc.)
+	# This prevents hangs when called from within scripts that have already imported heavy modules
+	ctx = multiprocessing.get_context('spawn')
+	process = ctx.Process(target=env_run_all, args=(env_path,))
 	process.start()
 
 	process.join(timeout)

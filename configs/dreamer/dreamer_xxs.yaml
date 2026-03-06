@@ -31,8 +31,8 @@ jax:
   checks: False
   logical_cpus: 0
   debug: False
-  policy_devices: [0]
-  train_devices: [0]
+  policy_devices: [0, 1, 2, 3]
+  train_devices: [0, 1, 2, 3]
   sync_every: 1
   profiler: False
   transfer_guard: False
@@ -96,7 +96,7 @@ report: True
 report_gradnorms: False
 batch_size: 16
 batch_length: 65
-batch_length_eval: 33
+batch_length_eval: 32
 replay_length: 0
 replay_length_eval: 0
 replay_context: 1

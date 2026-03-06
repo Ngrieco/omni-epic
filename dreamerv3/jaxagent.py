@@ -94,8 +94,21 @@ class JAXAgent(embodied.Agent):
 
   def init_policy(self, batch_size):
     seed = self._next_seeds(self.policy_sharded)
-    batch_size //= len(self.policy_mesh.devices)
+    num_devices = len(self.policy_mesh.devices)
+    print(f"[DEBUG] init_policy: batch_size={batch_size}, num_devices={num_devices}")
+    
+    # Validate batch_size is sufficient for the number of devices
+    if batch_size < num_devices:
+      raise ValueError(
+          f"Batch size ({batch_size}) must be >= number of devices ({num_devices}). "
+          f"This typically happens during evaluation when run.eval_eps < num_devices. "
+          f"Solution: Set run.eval_eps to at least {num_devices} in your config."
+      )
+    
+    batch_size //= num_devices
+    print(f"[DEBUG] init_policy: per_device_batch_size={batch_size}")
     carry = self._init_policy(self.policy_params, seed, batch_size)
+    print(f"[DEBUG] init_policy: carry shape before split={jax.tree.map(lambda x: x.shape, carry)}")
     if self.jaxcfg.fetch_policy_carry:
       carry = self._take_outs(fetch_async(carry))
     else:
@@ -350,19 +363,19 @@ class JAXAgent(embodied.Agent):
 
     ps, pm = self.policy_sharded, self.policy_mirrored
     self._init_policy = jax.jit(
-        init_policy, (pm, ps), ps, static_argnames=['batch_size'])
+        init_policy, in_shardings=(pm, ps), out_shardings=ps, static_argnames=['batch_size'])
     self._policy = jax.jit(
-        policy, (pm, ps, ps, ps), ps, static_argnames=['mode'])
+        policy, in_shardings=(pm, ps, ps, ps), out_shardings=ps, static_argnames=['mode'])
 
     ts, tm = self.train_sharded, self.train_mirrored
     self._init_train = jax.jit(
-        init_train, (tm, ts), ts, static_argnames=['batch_size'])
+        init_train, in_shardings=(tm, ts), out_shardings=ts, static_argnames=['batch_size'])
     self._train = jax.jit(
-        train, (tm, tm, ts, ts, ts), (tm, ts, ts, tm), donate_argnums=[1])
+        train, in_shardings=(tm, tm, ts, ts, ts), out_shardings=(tm, ts, ts, tm), donate_argnums=[1])
     self._init_report = jax.jit(
-        init_report, (tm, ts), ts, static_argnames=['batch_size'])
+        init_report, in_shardings=(tm, ts), out_shardings=ts, static_argnames=['batch_size'])
     self._report = jax.jit(
-        report, (tm, ts, ts, ts), (tm, ts))
+        report, in_shardings=(tm, ts, ts, ts), out_shardings=(tm, ts))
 
   def _take_mets(self, mets):
     mets = jax.tree.map(lambda x: x.__array__(), mets)

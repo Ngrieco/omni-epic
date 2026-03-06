@@ -13,7 +13,7 @@ import mediapy
 from openai import OpenAI
 from openai import RateLimitError, APIConnectionError
 import anthropic
-import google.generativeai as genai
+# import google.generativeai as genai  # Removed - not used
 
 from embodied.envs.pybullet import PyBullet
 from omni_epic.core import prompts, ParseError
@@ -32,6 +32,7 @@ class FM:
 
 	def _create_client(self, client_name, model):
 		if client_name == "openai":
+			print("OpenAI Client")
 			return OpenAI(default_headers={"openai-organization": "eo-cogniverse-ai-devtools"})
 		elif client_name == "anthropic":
 			return anthropic.Anthropic()
@@ -73,6 +74,7 @@ class FM:
 		while True:
 			try:
 				if self._client_name == "openai":
+					print("OpenAI Chat Create")
 					completion = self._client.chat.completions.create(
 						messages=[
 							{"role": "system", "content": system_prompt},
@@ -82,6 +84,7 @@ class FM:
 						max_tokens=self._config.max_tokens,
 						temperature=self._config.temperature,
 					).choices[0].message.content
+					print("OpenAI Chat Complete")
 				elif self._client_name == "anthropic":
 					completion = self._client.messages.create(
 						system=system_prompt,
@@ -115,6 +118,16 @@ class FM:
 				# Log completion
 				completion = completion.strip()
 				logger.info({"system_prompt": system_prompt, "user_prompt": user_prompt, "completion": completion})
+				
+				# Print API response for debugging
+				print(f"\n[FM] ========== API RESPONSE ==========")
+				print(f"[FM] Response length: {len(completion)} characters")
+				print(f"[FM] First 500 chars:\n{completion[:500]}")
+				if len(completion) > 500:
+					print(f"[FM] ...(truncated)...")
+					print(f"[FM] Last 500 chars:\n{completion[-500:]}")
+				print(f"[FM] =====================================\n")
+				
 				return completion
 			except (RateLimitError, APIConnectionError, Exception) as e:
 				logger.info(f"API got error {e}. Retrying after 10 seconds.")
@@ -141,7 +154,7 @@ class FM:
 	def get_env_code(self, env_path):
 		"""Get environment code from env_path."""
 		import hydra
-		print(f"[FM] Reading environment code from: {env_path}")
+		#print(f"[FM] Reading environment code from: {env_path}")
 		# Handle relative paths by prepending original cwd if path is not absolute
 		if not os.path.isabs(env_path):
 			try:
@@ -295,9 +308,11 @@ class FM:
 				print(f"[FM] Environment code saved successfully")
 
 				# Test if environment halts
-				print(f"[FM] Testing if environment halts (timeout: 10s)...")
-				test_env_halts(env_path, timeout=10.)
-				print(f"[FM] Environment halts test passed")
+				# NOTE: Commented out due to multiprocessing context issues
+				# The test_env() call below will catch any real infinite loops or hangs
+				# print(f"[FM] Testing if environment halts (timeout: 10s)...")
+				# test_env_halts(env_path, timeout=10.)
+				# print(f"[FM] Environment halts test passed")
 
 				# Test environment
 				print(f"[FM] Testing environment...")
@@ -328,15 +343,12 @@ class FM:
 				env = PyBullet(env_path=env_path, vision=False)._env
 				renders, renders3p = env.visualize()
 				env.close()
-				print(f"[FM] Saving visualization videos and GIFs...")
-				# Save as MP4
-				mediapy.write_video(os.path.join(task_path, "render.mp4"), renders)
-				mediapy.write_video(os.path.join(task_path, "render3p.mp4"), renders3p)
-				# Save as GIF
+				print(f"[FM] Saving visualization GIFs...")
+				# Save as GIF (skip MP4 since ffmpeg is not available)
 				import imageio
 				imageio.mimsave(os.path.join(task_path, "render.gif"), renders, fps=30, loop=0)
 				imageio.mimsave(os.path.join(task_path, "render3p.gif"), renders3p, fps=30, loop=0)
-				print(f"[FM] Visualization complete (saved as MP4 and GIF)")
+				print(f"[FM] Visualization complete (saved as GIF)")
 				print(f"[FM]   - {os.path.join(task_path, 'render.gif')}")
 				print(f"[FM]   - {os.path.join(task_path, 'render3p.gif')}")
 

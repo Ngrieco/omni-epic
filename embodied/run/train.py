@@ -113,7 +113,7 @@ def train(make_agent, make_replay, make_env, make_logger, args):
   driver.on_step(log_step)
 
   fns = [bind(make_env, i) for i in range(args.eval_eps)]
-  driver_eval = DriverEval(fns, args.driver_parallel, height=90, width=160)
+  driver_eval = DriverEval(fns, args.driver_parallel, height=480, width=640)
   driver_eval.on_step(log_step_eval)
 
   dataset_train = iter(agent.dataset(bind(
@@ -154,6 +154,13 @@ def train(make_agent, make_replay, make_env, make_logger, args):
     if should_eval(step) and len(replay):
       mets, _ = agent.report(next(dataset_report), carry_report)
       logger.add(mets, prefix='report')
+      
+      # Run actual evaluation episode with rendering every eval_every steps
+      print(f'\n[EVAL] Running evaluation episode at step {step}...')
+      eval_policy = lambda *args: agent.policy(*args, mode='eval')
+      driver_eval.reset(agent.init_policy)
+      driver_eval(eval_policy, episodes=1)
+      print(f'[EVAL] Evaluation complete, episode saved to {eval_dir}')
 
     if should_log(step):
       logger.add(agg.result())

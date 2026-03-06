@@ -28,7 +28,7 @@ use_archive: True  # whether to use the archive when generating tasks
 environment_generator:
   # LLM params
   client: openai
-  model: gpt-4o
+  model: claude-4-5-sonnet-latest
   max_tokens: 4096
   temperature: 0
 
@@ -39,7 +39,7 @@ task_generator:
   enable_moi: True  # whether to include interestingness in task generation
   # LLM params
   client: openai
-  model: gpt-4o
+  model: claude-4-5-sonnet-latest
   max_tokens: 4096
   temperature: 0
 
@@ -47,7 +47,7 @@ model_of_interestingness:
   num_examples: 10
   # LLM params
   client: openai
-  model: gpt-4o
+  model: claude-4-5-sonnet-latest
   max_tokens: 4096
   temperature: 0
 
@@ -64,7 +64,7 @@ task_iterator:
   num_examples: 5
   # LLM params
   client: openai
-  model: gpt-4o
+  model: claude-4-5-sonnet-latest
   max_tokens: 4096
   temperature: 0
 
